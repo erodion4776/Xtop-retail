@@ -1,0 +1,6 @@
+{
+  "name": "XTOPFlow",
+  "description": "XTOPFlow is a professional multi-website email marketing and CRM platform that helps businesses manage subscribers, campaigns, domains, and automated email delivery.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
