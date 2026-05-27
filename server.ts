@@ -43,6 +43,23 @@ async function startServer() {
       res.json(results);
   });
   
+  // POST /api/test-email
+  app.post("/api/test-email", async (req: any, res: any) => {
+      const { email } = req.body;
+      if (!email) return res.status(400).json({ success: false, error: 'Email is required' });
+      try {
+          await resend.emails.send({
+              from: 'noreply@xtopflow.com',
+              to: email,
+              subject: 'XTOPFlow Backend Test Email',
+              html: '<p>This is a test email confirming that the XTOPFlow email system is working correctly on Render.</p>'
+          });
+          return res.json({ success: true, message: 'Test email sent successfully' });
+      } catch (error: any) {
+          return res.status(500).json({ success: false, error: error.message });
+      }
+  });
+  
   // Basic in-memory rate limiter per IP (simplistic MVP protection)
   const ipRateLimit = new Map<string, number[]>();
 
