@@ -11,10 +11,14 @@ export default function EmailCenter() {
   const [loading, setLoading] = useState(false);
 
   const fetchData = async () => {
-    const subRes = await fetch('/api/subscribers');
-    const logsRes = await fetch('/api/email-logs');
-    setSubscribers(await subRes.json());
-    setLogs(await logsRes.json());
+    try {
+      const subRes = await fetch('/api/subscribers');
+      const logsRes = await fetch('/api/email-logs');
+      if (subRes.ok) setSubscribers(await subRes.json());
+      if (logsRes.ok) setLogs(await logsRes.json());
+    } catch (e) {
+      console.error('Failed to fetch data', e);
+    }
   };
 
   useEffect(() => {

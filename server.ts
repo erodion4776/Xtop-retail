@@ -66,14 +66,14 @@ async function startServer() {
   app.get("/api/subscribers", async (req: any, res: any) => {
     const { data, error } = await supabaseAdmin.from('subscribers').select('*');
     if (error) return res.status(500).json({ error: error.message });
-    res.json(data);
+    res.json(data || []);
   });
 
   app.post("/api/subscribers", async (req: any, res: any) => {
     const { email, name } = req.body;
     const { data, error } = await supabaseAdmin.from('subscribers').insert({ email, name });
     if (error) return res.status(500).json({ error: error.message });
-    res.json(data);
+    res.json(data || []);
   });
 
   app.post("/api/send-campaign", async (req: any, res: any) => {
@@ -105,7 +105,7 @@ async function startServer() {
   app.get("/api/email-logs", async (req: any, res: any) => {
     const { data, error } = await supabaseAdmin.from('email_logs').select('*').order('created_at', { ascending: false });
     if (error) return res.status(500).json({ error: error.message });
-    res.json(data);
+    res.json(data || []);
   });
   
   // Basic in-memory rate limiter per IP (simplistic MVP protection)
