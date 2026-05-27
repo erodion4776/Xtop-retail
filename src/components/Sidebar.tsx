@@ -13,6 +13,7 @@ export default function Sidebar({ activeTab, setActiveTab, isOpen, setIsOpen }: 
     { id: 'dashboard' as ActiveTab, label: 'Dashboard', icon: LayoutDashboard },
     { id: 'subscribers' as ActiveTab, label: 'Subscribers', icon: Users },
     { id: 'campaigns' as ActiveTab, label: 'Campaigns', icon: Send },
+    { id: 'email-center' as ActiveTab, label: 'Email Center', icon: Mail },
     { id: 'settings' as ActiveTab, label: 'Settings', icon: Settings },
   ];
 

@@ -5,6 +5,7 @@ import DashboardView from './components/DashboardView';
 import SubscribersView from './components/SubscribersView';
 import CampaignsView from './components/CampaignsView';
 import SettingsView from './components/SettingsView';
+import EmailCenter from './components/EmailCenter';
 
 import { ActiveTab, Subscriber, Campaign, RecentActivity } from './types';
 import { INITIAL_SUBSCRIBERS, INITIAL_CAMPAIGNS, INITIAL_ACTIVITIES } from './mockData';
@@ -328,6 +329,9 @@ export default function App() {
                   senderName={activeClient?.name || 'XTOPFlow Broadcasts'}
                   onSaveSender={handleSaveSender}
                 />
+              )}
+              {activeTab === 'email-center' && (
+                <EmailCenter />
               )}
             </>
           )}

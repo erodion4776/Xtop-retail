@@ -4,6 +4,7 @@ import { createServer as createViteServer } from "vite";
 import { Resend } from "resend";
 import { supabaseAdmin } from "./server/supabase.js";
 import { checkDomains } from "./server/dns.js";
+import { logEmail } from "./server/logger.js";
 import dotenv from "dotenv";
 
 dotenv.config();
@@ -54,10 +55,57 @@ async function startServer() {
               subject: 'XTOPFlow Backend Test Email',
               html: '<p>This is a test email confirming that the XTOPFlow email system is working correctly on Render.</p>'
           });
+          await logEmail(email, 'XTOPFlow Backend Test Email', 'Test body', 'test', 'sent');
           return res.json({ success: true, message: 'Test email sent successfully' });
       } catch (error: any) {
           return res.status(500).json({ success: false, error: error.message });
       }
+  });
+
+  // Email Center APIs
+  app.get("/api/subscribers", async (req: any, res: any) => {
+    const { data, error } = await supabaseAdmin.from('subscribers').select('*');
+    if (error) return res.status(500).json({ error: error.message });
+    res.json(data);
+  });
+
+  app.post("/api/subscribers", async (req: any, res: any) => {
+    const { email, name } = req.body;
+    const { data, error } = await supabaseAdmin.from('subscribers').insert({ email, name });
+    if (error) return res.status(500).json({ error: error.message });
+    res.json(data);
+  });
+
+  app.post("/api/send-campaign", async (req: any, res: any) => {
+    const { subject, message, sendTo, emails } = req.body;
+    try {
+        let targets = [];
+        if (sendTo === 'all') {
+            const { data } = await supabaseAdmin.from('subscribers').select('email');
+            targets = data?.map(s => s.email) || [];
+        } else if (sendTo === 'single' && emails) {
+            targets = emails;
+        }
+
+        for (const email of targets) {
+            await resend.emails.send({
+                from: 'noreply@xtopflow.com',
+                to: email,
+                subject,
+                html: `<p>${message}</p>`
+            });
+            await logEmail(email, subject, message, 'campaign', 'sent');
+        }
+        res.json({ success: true });
+    } catch (e: any) {
+        res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.get("/api/email-logs", async (req: any, res: any) => {
+    const { data, error } = await supabaseAdmin.from('email_logs').select('*').order('created_at', { ascending: false });
+    if (error) return res.status(500).json({ error: error.message });
+    res.json(data);
   });
   
   // Basic in-memory rate limiter per IP (simplistic MVP protection)
