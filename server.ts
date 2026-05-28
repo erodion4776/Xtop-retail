@@ -12,7 +12,8 @@ dotenv.config({ silent: true });
 function logEnvironmentDiagnostic() {
     console.log("--- Environment Diagnostic ---");
     console.log(`Node Environment: ${process.env.NODE_ENV || 'development'}`);
-    console.log(`Supabase URL: ${process.env.SUPABASE_URL ? 'Detected' : 'Missing'}`);
+    console.log(`Supabase URL: ${process.env.VITE_SUPABASE_URL ? 'Detected' : 'Missing'}`);
+    console.log(`Supabase Service Key: ${process.env.SUPABASE_SERVICE_ROLE_KEY ? 'Detected' : 'Missing'}`);
     console.log(`Resend API Key: ${process.env.RESEND_API_KEY ? 'Detected' : 'Missing'}`);
     console.log("------------------------------");
 }
