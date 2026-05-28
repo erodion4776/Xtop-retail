@@ -7,9 +7,28 @@ import { checkDomains } from "./server/dns.js";
 import { logEmail } from "./server/logger.js";
 import dotenv from "dotenv";
 
-dotenv.config();
+dotenv.config({ silent: true });
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+function logEnvironmentDiagnostic() {
+    console.log("--- Environment Diagnostic ---");
+    console.log(`Node Environment: ${process.env.NODE_ENV || 'development'}`);
+    console.log(`Supabase URL: ${process.env.SUPABASE_URL ? 'Detected' : 'Missing'}`);
+    console.log(`Resend API Key: ${process.env.RESEND_API_KEY ? 'Detected' : 'Missing'}`);
+    console.log("------------------------------");
+}
+
+let resendClient: Resend | null = null;
+function getResend() {
+    if (!resendClient) {
+        const key = process.env.RESEND_API_KEY;
+        if (!key) {
+            console.error("RESEND_API_KEY is not set!");
+            throw new Error("RESEND_API_KEY is not set");
+        }
+        resendClient = new Resend(key);
+    }
+    return resendClient;
+}
 
 // Background job scheduler: Check pending domains every 15 minutes
 setInterval(async () => {
@@ -32,6 +51,7 @@ setInterval(async () => {
 }, 15 * 60 * 1000);
 
 async function startServer() {
+  logEnvironmentDiagnostic();
   const app = express();
   app.use(express.json());
   const PORT = 3000;
@@ -49,7 +69,7 @@ async function startServer() {
       const { email } = req.body;
       if (!email) return res.status(400).json({ success: false, error: 'Email is required' });
       try {
-          await resend.emails.send({
+          await getResend().emails.send({
               from: 'noreply@xtopflow.com',
               to: email,
               subject: 'XTOPFlow Backend Test Email',
@@ -88,7 +108,7 @@ async function startServer() {
         }
 
         for (const email of targets) {
-            await resend.emails.send({
+            await getResend().emails.send({
                 from: 'noreply@xtopflow.com',
                 to: email,
                 subject,
@@ -180,7 +200,7 @@ async function startServer() {
 
     // 5. Send email via Resend
     try {
-        await resend.emails.send({
+        await getResend().emails.send({
             from: from,
             to: email,
             subject: 'Welcome!',
@@ -235,7 +255,7 @@ async function startServer() {
     // 3. Send emails
     for (const sub of subscribers || []) {
         try {
-            await resend.emails.send({
+            await getResend().emails.send({
                 from,
                 to: sub.email,
                 subject,
