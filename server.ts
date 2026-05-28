@@ -97,87 +97,46 @@ async function startServer() {
     res.json(data || []);
   });
 
+  // POST /api/send-campaign
   app.post("/api/send-campaign", async (req: any, res: any) => {
-    const { client_id, subject, content, campaign_id, sendTo, emails, message } = req.body;
-    
-    try {
-        // 1. Tenant-isolated campaign logic
-        if (client_id) {
-            const { data: subscribers, error: subError } = await supabaseAdmin
-                .from('subscribers')
-                .select('email')
-                .eq('client_id', client_id)
-                .eq('status', 'active');
-                
-            if (subError) return res.status(500).json({ error: subError.message });
-            
-            const { data: client } = await supabaseAdmin
-               .from('clients')
-               .select('sender_email')
-               .eq('id', client_id)
-               .single();
+      const { subject, message, sendTo, emails } = req.body;
+      if (!subject || !message) {
+          return res.status(400).json({ error: 'Subject and message are required' });
+      }
+      try {
+          let targets: string[] = [];
+          if (sendTo === 'all') {
+              const { data } = await supabaseAdmin.from('subscribers').select('email');
+              targets = data?.map((s: any) => s.email) || [];
+          } else if (sendTo === 'single' && emails?.length) {
+              targets = emails;
+          }
+  
+          if (targets.length === 0) {
+              return res.status(400).json({ error: 'No recipients found' });
+          }
+  
+          for (const email of targets) {
+              await getResend().emails.send({
+                  from: 'onboarding@resend.dev', // replace with your verified domain email
+                  to: email,
+                  subject,
+                  html: `<div style="font-family:sans-serif;max-width:600px;margin:0 auto">${message}</div>`
+              });
+              await logEmail(email, subject, message, 'campaign', 'sent');
+          }
+          res.json({ success: true, sent: targets.length });
+      } catch (e: any) {
+          console.error('Send campaign error:', e);
+          res.status(500).json({ error: e.message });
+      }
+  });
 
-            let from = 'onboarding@resend.dev'; // Default to test sender
-            const senderEmail = client?.sender_email;
-            if (senderEmail && senderEmail.includes('@')) {
-                const domain = senderEmail.split('@')[1];
-                const { data: domainCheck } = await supabaseAdmin
-                    .from('domains')
-                    .select('status')
-                    .eq('client_id', client_id)
-                    .eq('domain_name', domain)
-                    .eq('status', 'verified')
-                    .maybeSingle();
-
-                if (domainCheck) {
-                    from = senderEmail;
-                } else {
-                    console.warn(`Sender domain ${domain} not verified, using test sender.`);
-                }
-            }
-            
-            for (const sub of subscribers || []) {
-                try {
-                    await getResend().emails.send({
-                        from,
-                        to: sub.email,
-                        subject,
-                        html: content || `<p>${message}</p>`
-                    });
-                } catch (e) {
-                    console.error("Failed to send email to", sub.email, e);
-                }
-            }
-            
-            await supabaseAdmin.from('campaigns').update({ status: 'sent' }).eq('id', campaign_id);
-            return res.json({ success: true });
-        } 
-
-        // 2. Email Center/Simple campaign logic
-        else {
-            let targets: string[] = [];
-            if (sendTo === 'all') {
-                const { data } = await supabaseAdmin.from('subscribers').select('email');
-                targets = data?.map((s: any) => s.email) || [];
-            } else if (sendTo === 'single' && emails) {
-                targets = emails;
-            }
-
-            for (const email of targets) {
-                await getResend().emails.send({
-                    from: 'onboarding@resend.dev', // Default to test sender
-                    to: email,
-                    subject,
-                    html: `<p>${message}</p>`
-                });
-                await logEmail(email, subject, message, 'campaign', 'sent');
-            }
-            return res.json({ success: true });
-        }
-    } catch (e: any) {
-        console.error('Send campaign error:', e);
-        return res.status(500).json({ error: e.message });
-    }
+  // POST /api/welcome-template
+  app.post("/api/welcome-template", async (req: any, res: any) => {
+      const { subject, body, enabled } = req.body;
+      (global as any).welcomeTemplate = { subject, body, enabled };
+      res.json({ success: true });
   });
 
   app.get("/api/email-logs", async (req: any, res: any) => {
@@ -258,12 +217,19 @@ async function startServer() {
 
     // 5. Send email via Resend
     try {
-        await getResend().emails.send({
-            from: from,
-            to: email,
+        const template = (global as any).welcomeTemplate || {
             subject: 'Welcome!',
-            html: '<p>Welcome to our newsletter!</p>'
-        });
+            body: '<p>Welcome to our newsletter!</p>',
+            enabled: true
+        };
+        if (template.enabled) {
+            await getResend().emails.send({
+                from: 'onboarding@resend.dev',
+                to: email,
+                subject: template.subject,
+                html: template.body.replace('{email}', email)
+            });
+        }
     } catch (e) {
         console.error("Resend error", e);
     }
