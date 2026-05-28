@@ -98,28 +98,85 @@ async function startServer() {
   });
 
   app.post("/api/send-campaign", async (req: any, res: any) => {
-    const { subject, message, sendTo, emails } = req.body;
+    const { client_id, subject, content, campaign_id, sendTo, emails, message } = req.body;
+    
     try {
-        let targets = [];
-        if (sendTo === 'all') {
-            const { data } = await supabaseAdmin.from('subscribers').select('email');
-            targets = data?.map(s => s.email) || [];
-        } else if (sendTo === 'single' && emails) {
-            targets = emails;
-        }
+        // 1. Tenant-isolated campaign logic
+        if (client_id) {
+            const { data: subscribers, error: subError } = await supabaseAdmin
+                .from('subscribers')
+                .select('email')
+                .eq('client_id', client_id)
+                .eq('status', 'active');
+                
+            if (subError) return res.status(500).json({ error: subError.message });
+            
+            const { data: client } = await supabaseAdmin
+               .from('clients')
+               .select('sender_email')
+               .eq('id', client_id)
+               .single();
 
-        for (const email of targets) {
-            await getResend().emails.send({
-                from: 'noreply@xtopflow.com',
-                to: email,
-                subject,
-                html: `<p>${message}</p>`
-            });
-            await logEmail(email, subject, message, 'campaign', 'sent');
+            let from = 'onboarding@resend.dev'; // Default to test sender
+            const senderEmail = client?.sender_email;
+            if (senderEmail && senderEmail.includes('@')) {
+                const domain = senderEmail.split('@')[1];
+                const { data: domainCheck } = await supabaseAdmin
+                    .from('domains')
+                    .select('status')
+                    .eq('client_id', client_id)
+                    .eq('domain_name', domain)
+                    .eq('status', 'verified')
+                    .maybeSingle();
+
+                if (domainCheck) {
+                    from = senderEmail;
+                } else {
+                    console.warn(`Sender domain ${domain} not verified, using test sender.`);
+                }
+            }
+            
+            for (const sub of subscribers || []) {
+                try {
+                    await getResend().emails.send({
+                        from,
+                        to: sub.email,
+                        subject,
+                        html: content || `<p>${message}</p>`
+                    });
+                } catch (e) {
+                    console.error("Failed to send email to", sub.email, e);
+                }
+            }
+            
+            await supabaseAdmin.from('campaigns').update({ status: 'sent' }).eq('id', campaign_id);
+            return res.json({ success: true });
+        } 
+
+        // 2. Email Center/Simple campaign logic
+        else {
+            let targets: string[] = [];
+            if (sendTo === 'all') {
+                const { data } = await supabaseAdmin.from('subscribers').select('email');
+                targets = data?.map((s: any) => s.email) || [];
+            } else if (sendTo === 'single' && emails) {
+                targets = emails;
+            }
+
+            for (const email of targets) {
+                await getResend().emails.send({
+                    from: 'onboarding@resend.dev', // Default to test sender
+                    to: email,
+                    subject,
+                    html: `<p>${message}</p>`
+                });
+                await logEmail(email, subject, message, 'campaign', 'sent');
+            }
+            return res.json({ success: true });
         }
-        res.json({ success: true });
     } catch (e: any) {
-        res.status(500).json({ error: e.message });
+        console.error('Send campaign error:', e);
+        return res.status(500).json({ error: e.message });
     }
   });
 
@@ -214,64 +271,7 @@ async function startServer() {
     res.json({ success: true, subscriber });
   });
 
-  // POST /api/send-campaign
-  app.post("/api/send-campaign", async (req: any, res: any) => {
-    const { client_id, subject, content, campaign_id } = req.body;
-    
-    // 1. Fetch Subscribers (Tenant isolated)
-    const { data: subscribers, error } = await supabaseAdmin
-        .from('subscribers')
-        .select('email')
-        .eq('client_id', client_id)
-        .eq('status', 'active');
-        
-    if (error) return res.status(500).json({ error: error.message });
-    
-    // 2. Fetch sender_email
-    const { data: client } = await supabaseAdmin
-       .from('clients')
-       .select('sender_email')
-       .eq('id', client_id)
-       .single();
 
-    let from = 'noreply@yourdomain.com';
-    const senderEmail = client?.sender_email;
-    if (senderEmail && senderEmail.includes('@')) {
-        const domain = senderEmail.split('@')[1];
-        const { data: domainCheck } = await supabaseAdmin
-            .from('domains')
-            .select('status')
-            .eq('client_id', client_id)
-            .eq('domain_name', domain)
-            .eq('status', 'verified')
-            .maybeSingle();
-
-        if (domainCheck) {
-            from = senderEmail;
-        } else {
-            console.warn(`Sender domain ${domain} not verified for client ${client_id}, using default.`);
-        }
-    }
-    
-    // 3. Send emails
-    for (const sub of subscribers || []) {
-        try {
-            await getResend().emails.send({
-                from,
-                to: sub.email,
-                subject,
-                html: content
-            });
-        } catch (e) {
-            console.error("Failed to send email to", sub.email, e);
-        }
-    }
-    
-    // 4. Update status
-    await supabaseAdmin.from('campaigns').update({ status: 'sent' }).eq('id', campaign_id);
-    
-    res.json({ success: true });
-  });
 
   // --- Vite Middleware ---
   if (process.env.NODE_ENV !== "production") {
