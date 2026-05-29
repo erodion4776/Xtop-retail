@@ -100,6 +100,7 @@ async function startServer() {
   // POST /api/send-campaign
   app.post("/api/send-campaign", async (req: any, res: any) => {
       const { subject, message, sendTo, emails } = req.body;
+      console.log('Send campaign hit:', { subject, sendTo, emails });
       if (!subject || !message) {
           return res.status(400).json({ error: 'Subject and message are required' });
       }
@@ -112,22 +113,24 @@ async function startServer() {
               targets = emails;
           }
   
+          console.log('Targets:', targets);
           if (targets.length === 0) {
               return res.status(400).json({ error: 'No recipients found' });
           }
   
           for (const email of targets) {
-              await getResend().emails.send({
-                  from: 'onboarding@resend.dev', // replace with your verified domain email
+              const result = await getResend().emails.send({
+                  from: 'onboarding@resend.dev', // Use test sender
                   to: email,
                   subject,
-                  html: `<div style="font-family:sans-serif;max-width:600px;margin:0 auto">${message}</div>`
+                  html: `<p>${message}</p>`
               });
+              console.log('Resend result:', result);
               await logEmail(email, subject, message, 'campaign', 'sent');
           }
           res.json({ success: true, sent: targets.length });
       } catch (e: any) {
-          console.error('Send campaign error:', e);
+          console.error('Send campaign error:', e.message);
           res.status(500).json({ error: e.message });
       }
   });
