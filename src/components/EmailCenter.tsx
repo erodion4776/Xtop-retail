@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { Mail, Users, History, Send, Loader2, Plus, Trash2, ToggleLeft, ToggleRight, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Mail, Users, History, Send, Loader2, Plus, AlertCircle, CheckCircle2, ToggleLeft, ToggleRight, Building2 } from 'lucide-react';
+import { siteConfigs } from '../../server/emailConfig';
 
 interface Subscriber {
   id: string;
@@ -45,6 +46,7 @@ export default function EmailCenter() {
   const [logs, setLogs] = useState<EmailLog[]>([]);
 
   // Campaign send state
+  const [siteKey, setSiteKey] = useState(siteConfigs[0].siteKey);
   const [subject, setSubject] = useState('');
   const [message, setMessage] = useState('');
   const [sendTo, setSendTo] = useState<'all' | 'single'>('all');
@@ -103,6 +105,7 @@ export default function EmailCenter() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          siteKey,
           subject,
           message,
           sendTo,
@@ -201,6 +204,17 @@ export default function EmailCenter() {
       {activeTab === 'send' && (
         <div className="bg-white border border-zinc-200 rounded-xl p-6 shadow-xs space-y-5 max-w-2xl">
           <h3 className="font-bold text-sm text-zinc-900">Compose Campaign</h3>
+
+          <div className="space-y-1">
+            <label className="text-xs font-semibold text-zinc-600">Select Website <span className="text-rose-500">*</span></label>
+            <select
+              value={siteKey}
+              onChange={(e) => setSiteKey(e.target.value)}
+              className="w-full text-xs py-2.5 px-3 bg-zinc-50 border border-zinc-200 rounded-lg text-zinc-800 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
+            >
+              {siteConfigs.map(s => <option key={s.siteKey} value={s.siteKey}>{s.brandName}</option>)}
+            </select>
+          </div>
 
           <div className="space-y-1">
             <label className="text-xs font-semibold text-zinc-600">Subject Line <span className="text-rose-500">*</span></label>

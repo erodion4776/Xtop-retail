@@ -4,6 +4,8 @@ import { createServer as createViteServer } from "vite";
 import { Resend } from "resend";
 import { supabaseAdmin } from "./server/supabase.js";
 import { checkDomains } from "./server/dns.js";
+import { sendEmail } from "./server/emailService.js";
+import { siteConfigs } from "./server/emailConfig.js";
 import { logEmail } from "./server/logger.js";
 import dotenv from "dotenv";
 
@@ -99,47 +101,45 @@ async function startServer() {
 
   // POST /api/send-campaign
   app.post("/api/send-campaign", async (req: any, res: any) => {
-      const { subject, message, sendTo, emails } = req.body;
-      console.log('Send campaign hit:', { subject, sendTo, emails });
-      if (!subject || !message) {
-          return res.status(400).json({ error: 'Subject and message are required' });
-      }
+      const { siteKey, subject, message, sendTo, emails } = req.body;
+      
       try {
           let targets: string[] = [];
+          
           if (sendTo === 'all') {
               const { data } = await supabaseAdmin.from('subscribers').select('email');
               targets = data?.map((s: any) => s.email) || [];
           } else if (sendTo === 'single' && emails?.length) {
               targets = emails;
           }
-  
-          console.log('Targets:', targets);
-          if (targets.length === 0) {
-              return res.status(400).json({ error: 'No recipients found' });
-          }
-  
-          for (const email of targets) {
-              const result = await getResend().emails.send({
-                  from: 'onboarding@resend.dev', // Use test sender
-                  to: email,
-                  subject,
-                  html: `<p>${message}</p>`
-              });
-              console.log('Resend result:', result);
-              await logEmail(email, subject, message, 'campaign', 'sent');
+
+          if (targets.length === 0) return res.status(400).json({ error: 'No recipients found' });                
+
+          for (const to of targets) {
+              await sendEmail({ siteKey, to, templateName: 'campaign', variables: {name: 'User', email: to, message: message } });
           }
           res.json({ success: true, sent: targets.length });
+
       } catch (e: any) {
           console.error('Send campaign error:', e.message);
           res.status(500).json({ error: e.message });
       }
   });
 
-  // POST /api/welcome-template
-  app.post("/api/welcome-template", async (req: any, res: any) => {
-      const { subject, body, enabled } = req.body;
-      (global as any).welcomeTemplate = { subject, body, enabled };
-      res.json({ success: true });
+  // POST /api/send-welcome-email
+  app.post("/api/send-welcome-email", async (req: any, res: any) => {
+      const { siteKey, email, name } = req.body;
+      try {
+          await sendEmail({ 
+            siteKey, 
+            to: email, 
+            templateName: 'welcome', 
+            variables: { name, email, website_name: siteKey } 
+          });
+          res.json({ success: true });
+      } catch (e: any) {
+          res.status(500).json({ error: e.message });
+      }
   });
 
   app.get("/api/email-logs", async (req: any, res: any) => {
