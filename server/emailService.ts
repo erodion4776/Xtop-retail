@@ -1,4 +1,4 @@
-import { getResend } from './resend.js';
+import { getResend, retryOperation } from './resend.js';
 import { logEmail } from './logger.js';
 import { renderTemplate } from './templateEngine.js';
 import { supabaseAdmin } from './supabase.js';
@@ -193,30 +193,58 @@ export async function sendEmail({ siteKey, to, templateName, variables }: { site
     // 3. Render Template
     const rendered = renderTemplate(template, siteKey, variables);
 
-    // 4. Determine Sender Address (Support verified cyvisahelp.com)
-    // Resend requires verified domains, so we default to cyvisahelp.com, fallback to onboarding@resend.dev
-    const fromAddress = `"${config.senderName}" <noreply@cyvisahelp.com>`;
+    // 4. Determine Sender Address (Support verified domains with fallback support)
+    let senderName = config.senderName;
+    let senderEmail = 'noreply@cyvisahelp.com'; // Default verified sandbox domain
+    let replyTo = 'support@cylawtech.com';
 
-    // 5. Send via Resend
+    if (siteKey === 'cylawtech') {
+        senderName = process.env.SENDER_NAME || 'CylawTech';
+        senderEmail = process.env.SENDER_EMAIL || 'hello@cylawtech.com';
+        replyTo = process.env.REPLY_TO_EMAIL || 'support@cylawtech.com';
+    } else {
+        senderName = process.env[`SENDER_NAME_${siteKey.toUpperCase()}`] || config.senderName;
+        senderEmail = process.env[`SENDER_EMAIL_${siteKey.toUpperCase()}`] || (siteKey === 'cyvisahelp' ? 'noreply@cyvisahelp.com' : `noreply@${siteKey}.com`);
+        replyTo = process.env[`REPLY_TO_EMAIL_${siteKey.toUpperCase()}`] || 'support@cylawtech.com';
+    }
+
+    const fromAddress = `"${senderName}" <${senderEmail}>`;
+
+    // 5. Send via Resend with auto-retry on temporary rate limits or socket failure
     try {
-        await getResend().emails.send({
+        await retryOperation(() => getResend().emails.send({
             from: fromAddress,
             to,
             subject: rendered.subject,
             html: rendered.html,
-            text: rendered.text
-        });
+            text: rendered.text,
+            replyTo: replyTo,
+            headers: {
+                'List-Unsubscribe': `<https://${siteKey}.com/unsubscribe?email=${encodeURIComponent(to)}>`,
+                'X-Entity-ID': `${siteKey}-${Date.now()}`
+            }
+        }));
         await logEmail(to, rendered.subject, rendered.text, templateName, 'sent');
     } catch (resendErr: any) {
-        console.warn("Attempting send with cyvisahelp.com failed, falling back to onboarding@resend.dev...", resendErr.message);
+        console.warn(`Attempting send with ${senderEmail} failed, falling back to onboarding@resend.dev...`, resendErr.message);
         // Fallback for unverified system testing
-        await getResend().emails.send({
-            from: `onboarding@resend.dev`,
-            to,
-            subject: rendered.subject,
-            html: rendered.html,
-            text: rendered.text
-        });
-        await logEmail(to, rendered.subject, rendered.text, templateName, 'sent');
+        try {
+            await retryOperation(() => getResend().emails.send({
+                from: `onboarding@resend.dev`,
+                to,
+                subject: rendered.subject,
+                html: rendered.html,
+                text: rendered.text,
+                replyTo: replyTo,
+                headers: {
+                    'List-Unsubscribe': `<https://${siteKey}.com/unsubscribe?email=${encodeURIComponent(to)}>`
+                }
+            }));
+            await logEmail(to, rendered.subject, rendered.text, templateName, 'sent');
+        } catch (fallbackErr: any) {
+            console.error("Critical: Fallback email send failed as well:", fallbackErr.message);
+            await logEmail(to, rendered.subject, rendered.text, templateName, 'failed');
+            throw fallbackErr;
+        }
     }
 }

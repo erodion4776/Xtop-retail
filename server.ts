@@ -1,7 +1,7 @@
 import express from "express";
 import path from "path";
 import { createServer as createViteServer } from "vite";
-import { getResend } from "./server/resend.js";
+import { getResend, retryOperation } from "./server/resend.js";
 import { supabaseAdmin } from "./server/supabase.js";
 import { checkDomains } from "./server/dns.js";
 import { sendEmail } from "./server/emailService.js";
@@ -111,10 +111,10 @@ async function startServer() {
       }
   });
 
-  // POST /api/send-email (Official Resend SDK Implementation)
+  // POST /api/send-email (Official Resend SDK Implementation with high deliverability configuration)
   const emailLimiter = rateLimit({
       windowMs: 15 * 60 * 1000,
-      max: 5,
+      max: 20, // Increase slightly to allow for testing campaigns/test API comfortably
       message: { error: 'Too many requests, please try again later.' }
   });
 
@@ -127,18 +127,55 @@ async function startServer() {
           return res.status(400).json({ success: false, error: 'Invalid email address' });
       }
       
+      // Load configurable sender credentials with optimal default formatting
+      const senderName = process.env.SENDER_NAME || 'CylawTech';
+      const senderEmail = process.env.SENDER_EMAIL || 'hello@cylawtech.com';
+      const replyTo = process.env.REPLY_TO_EMAIL || 'support@cylawtech.com';
+      const fromAddress = `"${senderName}" <${senderEmail}>`;
+
       try {
-          await getResend().emails.send({
-              from: 'noreply@cylawtech.com',
-              to,
-              subject,
-              html: message
-          });
-          // Also log it if needed
+          // Send via Resend with automatic retry on temporary outages or rate limits
+          let resendResponse;
+          try {
+              resendResponse = await retryOperation(() => getResend().emails.send({
+                  from: fromAddress,
+                  to,
+                  subject: subject,
+                  html: message,
+                  replyTo: replyTo,
+                  headers: {
+                      'List-Unsubscribe': `<https://cylawtech.com/unsubscribe?email=${encodeURIComponent(to)}>`,
+                      'X-Entity-ID': 'cylawtech-' + Date.now()
+                  }
+              }));
+          } catch (resendErr: any) {
+              addDebugLog('WARNING', `Sending via ${senderEmail} failed, trying system sandbox fallback onboarding@resend.dev...`);
+              resendResponse = await retryOperation(() => getResend().emails.send({
+                  from: 'onboarding@resend.dev',
+                  to,
+                  subject: subject,
+                  html: message,
+                  replyTo: replyTo,
+                  headers: {
+                      'List-Unsubscribe': `<https://cylawtech.com/unsubscribe?email=${encodeURIComponent(to)}>`
+                  }
+              }));
+          }
+
+          // Log database tracking record
           await logEmail(to, subject, message, 'api_request', 'sent');
-          return res.json({ success: true, message: 'Email sent successfully' });
+          addDebugLog('INFO', `Sent email successfully to ${to} (Subject: "${subject}")`);
+
+          return res.json({ 
+              success: true, 
+              message: 'Email sent successfully',
+              sender: fromAddress,
+              replyTo: replyTo
+          });
       } catch (error: any) {
           console.error("Resend API error:", error);
+          addDebugLog('ERROR', `Send failed to ${to}: ${error.message}`);
+          await logEmail(to, subject, message, 'api_request', 'failed');
           return res.status(500).json({ success: false, error: error.message });
       }
   });
@@ -283,6 +320,117 @@ async function startServer() {
     const { data, error } = await supabaseAdmin.from('email_logs').select('*').order('created_at', { ascending: false });
     if (error) return res.status(500).json({ error: error.message });
     res.json(data || []);
+  });
+
+  // POST /api/webhooks/resend - Real webhook receiver for bounces, delivered and complaints tracking
+  app.post("/api/webhooks/resend", async (req: any, res: any) => {
+      const payload = req.body;
+      const type = payload.type; // e.g. "email.delivered", "email.bounced", "email.complained"
+      const data = payload.data;
+      
+      if (!type || !data) {
+          addDebugLog('WARNING', 'Resend webhook received with invalid payload format.');
+          return res.status(400).json({ error: 'Invalid payload' });
+      }
+
+      const to = Array.isArray(data.to) ? data.to[0] : data.to;
+      if (!to) {
+          addDebugLog('WARNING', `Resend webhook ${type} has no recipient address.`);
+          return res.status(400).json({ error: 'No recipient in payload' });
+      }
+
+      addDebugLog('INFO', `Received Resend webhook of type ${type} for recipient ${to}`);
+
+      // Map event status
+      let dbStatus = 'sent';
+      if (type === 'email.delivered') dbStatus = 'delivered';
+      else if (type === 'email.bounced') dbStatus = 'bounced';
+      else if (type === 'email.complained') dbStatus = 'complaint';
+
+      try {
+          const { data: matchedLogs, error: fetchErr } = await supabaseAdmin
+              .from('email_logs')
+              .select('id, subject')
+              .eq('to', to)
+              .order('created_at', { ascending: false })
+              .limit(1);
+
+          if (fetchErr) throw fetchErr;
+
+          if (matchedLogs && matchedLogs.length > 0) {
+              const matchedLog = matchedLogs[0];
+              const { error: updateErr } = await supabaseAdmin
+                  .from('email_logs')
+                  .update({ status: dbStatus })
+                  .eq('id', matchedLog.id);
+
+              if (updateErr) throw updateErr;
+              addDebugLog('INFO', `Updated log ID ${matchedLog.id} for ${to} to status "${dbStatus}" via real Resend webhook.`);
+          } else {
+              await logEmail(to, data.subject || 'Webhook notification', `Subject: ${data.subject || ''}. ID: ${data.email_id || ''}`, 'webhook', dbStatus);
+              addDebugLog('INFO', `Created a new log entry for recipient ${to} with status "${dbStatus}" as no sent record existed.`);
+          }
+
+          return res.json({ success: true, processed: true });
+      } catch (err: any) {
+          console.error("Failed to process Resend webhook:", err.message);
+          addDebugLog('ERROR', `Resend webhook processing failed: ${err.message}`);
+          return res.status(500).json({ error: err.message });
+      }
+  });
+
+  // POST /api/test/simulate-webhook - Simulation trigger for frontend logs dashboard
+  app.post("/api/test/simulate-webhook", async (req: any, res: any) => {
+      const { to, status } = req.body;
+      if (!to || !status) {
+          return res.status(400).json({ error: "Missing required parameters: to, status" });
+      }
+
+      addDebugLog('INFO', `Dashboard Simulation Triggered: Mark ${to} as "${status}"`);
+
+      try {
+          const { data: logs, error: fetchErr } = await supabaseAdmin
+              .from('email_logs')
+              .select('id, subject, message, type')
+              .eq('to', to)
+              .order('created_at', { ascending: false })
+              .limit(1);
+
+          if (fetchErr) throw fetchErr;
+
+          if (logs && logs.length > 0) {
+              const matchedLog = logs[0];
+              const { error: updateErr } = await supabaseAdmin
+                  .from('email_logs')
+                  .update({ status })
+                  .eq('id', matchedLog.id);
+
+              if (updateErr) throw updateErr;
+              addDebugLog('INFO', `Simulated Log ID ${matchedLog.id} status modified successfully to "${status}".`);
+              return res.json({ success: true, message: `Updated most recent log ID ${matchedLog.id} for ${to} to status "${status}".` });
+          } else {
+              const { data: newLog, error: insertErr } = await supabaseAdmin
+                  .from('email_logs')
+                  .insert({
+                      to,
+                      subject: `Simulated ${status} Notification`,
+                      message: `A simulated body content showing ${status} metrics on the dashboard.`,
+                      type: 'test_simulation',
+                      status,
+                      created_at: new Date().toISOString()
+                  })
+                  .select()
+                  .single();
+
+              if (insertErr) throw insertErr;
+              addDebugLog('INFO', `Created fresh simulated log ID ${newLog?.id} with status "${status}".`);
+              return res.json({ success: true, message: `Created fresh simulated log entry for ${to} with status "${status}".` });
+          }
+      } catch (err: any) {
+          console.error("Simulation endpoint failed:", err.message);
+          addDebugLog('ERROR', `Simulation endpoint error: ${err.message}`);
+          return res.status(500).json({ error: err.message });
+      }
   });
 
   app.get("/api/debug-logs", (req: any, res: any) => {

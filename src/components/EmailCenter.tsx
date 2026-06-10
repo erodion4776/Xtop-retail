@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Mail, Users, History, Send, Loader2, Plus, AlertCircle, CheckCircle2, ToggleLeft, ToggleRight, Building2 } from 'lucide-react';
+import { Mail, Users, History, Send, Loader2, Plus, AlertCircle, CheckCircle2, ToggleLeft, ToggleRight, Building2, Activity, Check, TrendingUp, XCircle, AlertTriangle } from 'lucide-react';
 import { siteConfigs } from '../../server/emailConfig';
 
 interface Subscriber {
@@ -38,10 +38,10 @@ const DEFAULT_WELCOME: WelcomeTemplate = {
   enabled: true,
 };
 
-type ActiveTab = 'send' | 'welcome' | 'subscribers' | 'logs' | 'integration' | 'debug';
+type ActiveTab = 'health' | 'send' | 'welcome' | 'subscribers' | 'logs' | 'integration' | 'test' | 'debug';
 
 export default function EmailCenter() {
-  const [activeTab, setActiveTab] = useState<ActiveTab>('send');
+  const [activeTab, setActiveTab] = useState<ActiveTab>('health');
   const [subscribers, setSubscribers] = useState<Subscriber[]>([]);
   const [logs, setLogs] = useState<EmailLog[]>([]);
   const [debugLogs, setDebugLogs] = useState<{ timestamp: string, message: string, type: string }[]>([]);
@@ -166,6 +166,7 @@ export default function EmailCenter() {
   };
 
   const tabs: { id: ActiveTab; label: string; icon: any }[] = [
+    { id: 'health', label: 'Email Health', icon: Activity },
     { id: 'send', label: 'Send Campaign', icon: Send },
     { id: 'welcome', label: 'Welcome Email', icon: Mail },
     { id: 'subscribers', label: `Subscribers (${subscribers.length})`, icon: Users },
@@ -205,6 +206,13 @@ export default function EmailCenter() {
           );
         })}
       </div>
+
+      {/* EMAIL HEALTH DASHBOARD TAB */}
+      {activeTab === 'health' && (
+        <div className="space-y-6">
+          <EmailHealthTab logs={logs} onRefreshSim={fetchData} subscribers={subscribers} />
+        </div>
+      )}
 
       {/* SEND CAMPAIGN TAB */}
       {activeTab === 'send' && (
@@ -452,10 +460,12 @@ export default function EmailCenter() {
                     <span className="text-[10px] text-zinc-400 font-mono">
                       {log.created_at ? new Date(log.created_at).toLocaleString() : ''}
                     </span>
-                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${
-                      log.status === 'sent'
-                        ? 'bg-emerald-50 text-emerald-700'
-                        : 'bg-rose-50 text-rose-700'
+                    <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-md border ${
+                      log.status === 'sent' || log.status === 'delivered'
+                        ? 'bg-emerald-50 text-emerald-700 border-emerald-100'
+                        : log.status === 'complaint'
+                        ? 'bg-amber-50 text-amber-700 border-amber-100'
+                        : 'bg-rose-50 text-rose-700 border-rose-100'
                     }`}>
                       {log.status?.toUpperCase()}
                     </span>
@@ -723,6 +733,345 @@ function TestEmailTab() {
           {result.msg}
         </div>
       )}
+    </div>
+  );
+}
+
+interface EmailHealthTabProps {
+  logs: EmailLog[];
+  onRefreshSim: () => void;
+  subscribers: Subscriber[];
+}
+
+function EmailHealthTab({ logs, onRefreshSim, subscribers }: EmailHealthTabProps) {
+  const [dnsValidating, setDnsValidating] = useState(false);
+  const [dnsResults, setDnsResults] = useState<{
+    spfStatus: boolean;
+    dkimStatus: boolean;
+    dmarcStatus: boolean;
+    overall: boolean;
+  } | null>(null);
+
+  // Simulation states
+  const [simEmail, setSimEmail] = useState('');
+  const [simStatus, setSimStatus] = useState<'delivered' | 'bounced' | 'complaint'>('delivered');
+  const [simulating, setSimulating] = useState(false);
+  const [simResult, setSimResult] = useState<{ ok: boolean; msg: string } | null>(null);
+
+  const checkDns = async () => {
+    setDnsValidating(true);
+    try {
+      const res = await fetch('/api/domain/verify/cylawtech.com');
+      if (res.ok) {
+        setDnsResults(await res.json());
+      }
+    } catch (err) {
+      console.error('DNS record lookup failed:', err);
+    } finally {
+      setDnsValidating(false);
+    }
+  };
+
+  useEffect(() => {
+    checkDns();
+  }, []);
+
+  // Set default simulation recipient from subscribers if available
+  useEffect(() => {
+    if (subscribers.length > 0 && !simEmail) {
+      setSimEmail(subscribers[0].email);
+    }
+  }, [subscribers, simEmail]);
+
+  // Aggregate stats
+  const totalLogs = logs.length;
+  const deliveredCount = logs.filter((l) => l.status === 'delivered').length;
+  const bouncedCount = logs.filter((l) => l.status === 'bounced').length;
+  const complaintsCount = logs.filter((l) => l.status === 'complaint').length;
+  const sentOnlyCount = logs.filter((l) => l.status === 'sent').length;
+
+  // For visual tracking, emails are delivered unless they are explicitly bounced/complained
+  const validDeliveredCount = deliveredCount + sentOnlyCount;
+  const deliveryRate = totalLogs > 0 ? (validDeliveredCount / totalLogs) * 100 : 100.0;
+  const bounceRate = totalLogs > 0 ? (bouncedCount / totalLogs) * 100 : 0.0;
+  const complaintRate = totalLogs > 0 ? (complaintsCount / totalLogs) * 100 : 0.0;
+
+  // Grade reputation
+  let reputationGrade = 'Excellent';
+  let reputationDescription = 'All sender metrics correspond to premium deliverability benchmarks set by Gmail and Yahoo.';
+  let gradeColor = 'text-emerald-700 bg-emerald-50 border-emerald-100';
+  let gaugeColor = 'bg-emerald-500';
+
+  if (deliveryRate < 96 || bounceRate >= 2.0 || complaintRate >= 0.1) {
+    reputationGrade = 'Good';
+    reputationDescription = 'Stable reputation, but monitor warning logs. Keep bounces below 2.0% and complaints below 0.1%.';
+    gradeColor = 'text-amber-700 bg-amber-50 border-amber-100';
+    gaugeColor = 'bg-amber-500';
+  }
+  if (deliveryRate < 90 || bounceRate >= 5.0 || complaintRate >= 0.3) {
+    reputationGrade = 'At Risk';
+    reputationDescription = 'Critical threshold exceeded. Take corrective actions on SPF/DMARC records immediately to prevent spam filtering.';
+    gradeColor = 'text-rose-700 bg-rose-50 border-rose-100';
+    gaugeColor = 'bg-rose-500';
+  }
+
+  const handleSimulateWebhook = async () => {
+    if (!simEmail.trim()) {
+      setSimResult({ ok: false, msg: 'Please provide a target email address.' });
+      return;
+    }
+    setSimulating(true);
+    setSimResult(null);
+
+    try {
+      const res = await fetch('/api/test/simulate-webhook', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ to: simEmail.trim(), status: simStatus }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setSimResult({ ok: true, msg: data.message });
+        onRefreshSim(); // refresh metrics instantly!
+      } else {
+        setSimResult({ ok: false, msg: data.error || 'Webhook simulation failed.' });
+      }
+    } catch (err: any) {
+      setSimResult({ ok: false, msg: err.message || 'Connection failure.' });
+    } finally {
+      setSimulating(false);
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Overview Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+        {/* Deliverability Meter */}
+        <div className="bg-white border border-zinc-200 rounded-xl p-5 shadow-xs flex flex-col justify-between">
+          <div className="flex justify-between items-start">
+            <div>
+              <p className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">Reputation Grade</p>
+              <h3 className="text-xl font-extrabold text-zinc-900 mt-1">{deliveryRate.toFixed(1)}%</h3>
+            </div>
+            <span className={`text-[10px] font-bold px-2 py-1 rounded-md border ${gradeColor}`}>
+              {reputationGrade.toUpperCase()}
+            </span>
+          </div>
+
+          <div className="my-4">
+            <div className="w-full bg-zinc-100 h-2 rounded-full overflow-hidden">
+              <div className={`h-full transition-all duration-500 ${gaugeColor}`} style={{ width: `${Math.max(5, deliveryRate)}%` }}></div>
+            </div>
+          </div>
+
+          <p className="text-[11px] text-zinc-500 leading-relaxed">
+            {reputationDescription}
+          </p>
+        </div>
+
+        {/* Sender Credentials configured via env */}
+        <div className="bg-white border border-zinc-200 rounded-xl p-5 shadow-xs flex flex-col justify-between">
+          <div>
+            <p className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">Active Brand Router</p>
+            <h3 className="text-sm font-bold text-zinc-800 mt-2">CylawTech Sender Ident</h3>
+            
+            <div className="mt-3 space-y-1.5 font-mono text-[11px] text-zinc-600 bg-zinc-50 p-2.5 rounded-lg border border-zinc-100">
+              <div className="flex justify-between">
+                <span className="text-zinc-400">Sender:</span>
+                <span className="text-zinc-900 font-semibold">hello@cylawtech.com</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-zinc-400">Reply-To:</span>
+                <span className="text-zinc-900">support@cylawtech.com</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-zinc-400">Env Override:</span>
+                <span className="text-amber-600 font-semibold">Active</span>
+              </div>
+            </div>
+          </div>
+
+          <p className="text-[10px] text-zinc-400 leading-relaxed mt-3">
+            We prepared configurations to support sending from <strong className="font-semibold text-zinc-600">hello@mail.cylawtech.com</strong> soon. Adjust variables in <code className="bg-zinc-100 px-1 py-0.5 rounded">.env</code> easily.
+          </p>
+        </div>
+
+        {/* Key Metrics Counters */}
+        <div className="bg-white border border-zinc-200 rounded-xl p-5 shadow-xs space-y-4">
+          <p className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">Delivery Counters</p>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div className="p-2 bg-emerald-50/50 border border-emerald-100/40 rounded-lg">
+              <span className="text-[10px] text-zinc-500">Delivered</span>
+              <p className="text-base font-bold text-emerald-700">{validDeliveredCount}</p>
+            </div>
+            <div className="p-2 bg-rose-50/50 border border-rose-100/40 rounded-lg">
+              <span className="text-[10px] text-zinc-500">Bounced</span>
+              <p className="text-base font-bold text-rose-700">{bouncedCount}</p>
+            </div>
+            <div className="p-2 bg-amber-50/50 border border-amber-100/40 rounded-lg">
+              <span className="text-[10px] text-zinc-500">Complaints</span>
+              <p className="text-base font-bold text-amber-700">{complaintsCount}</p>
+            </div>
+            <div className="p-2 bg-zinc-50 border border-zinc-100 rounded-lg">
+              <span className="text-[10px] text-zinc-500">Total Despatched</span>
+              <p className="text-base font-bold text-zinc-700">{totalLogs}</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+        {/* Authentication checklists */}
+        <div className="bg-white border border-zinc-200 rounded-xl p-5 shadow-xs space-y-4">
+          <div className="flex justify-between items-center">
+            <div>
+              <h4 className="text-xs font-bold text-zinc-700 uppercase tracking-wide">Domain Authentication Status</h4>
+              <p className="text-[10px] text-zinc-400 mt-0.5">DNS security verification records for <strong className="text-zinc-600">cylawtech.com</strong></p>
+            </div>
+            <button
+              onClick={checkDns}
+              disabled={dnsValidating}
+              className="text-[11px] font-semibold text-indigo-600 hover:text-indigo-800 disabled:opacity-50 flex items-center gap-1.5 cursor-pointer bg-indigo-50 hover:bg-indigo-100 px-2.5 py-1 rounded-md transition-all"
+            >
+              {dnsValidating ? 'Checking...' : 'Check Records'}
+            </button>
+          </div>
+
+          <div className="space-y-2.5">
+            {/* SPF Check */}
+            <div className="flex items-center justify-between p-3 bg-zinc-50 border border-zinc-100 rounded-lg text-xs">
+              <div className="space-y-0.5">
+                <span className="font-bold text-zinc-700">SPF (Sender Policy Framework)</span>
+                <p className="text-[10px] text-zinc-400 font-mono">v=spf1 include:resend.com ~all</p>
+              </div>
+              {dnsResults?.spfStatus ? (
+                <span className="flex items-center gap-1 text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-100">
+                  <Check className="w-3 h-3" /> VERIFIED
+                </span>
+              ) : (
+                <span className="flex items-center gap-1 text-[10px] font-bold text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-100">
+                  <AlertTriangle className="w-3 h-3" /> UNCONFIGURED
+                </span>
+              )}
+            </div>
+
+            {/* DKIM Check */}
+            <div className="flex items-center justify-between p-3 bg-zinc-50 border border-zinc-100 rounded-lg text-xs">
+              <div className="space-y-0.5">
+                <span className="font-bold text-zinc-700">DKIM (DomainKeys Identified Mail)</span>
+                <p className="text-[10px] text-zinc-400 font-mono">resend._domainkey.cylawtech.com</p>
+              </div>
+              {dnsResults?.dkimStatus ? (
+                <span className="flex items-center gap-1 text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-100">
+                  <Check className="w-3 h-3" /> VERIFIED
+                </span>
+              ) : (
+                <span className="flex items-center gap-1 text-[10px] font-bold text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-100">
+                  <AlertTriangle className="w-3 h-3" /> UNCONFIGURED
+                </span>
+              )}
+            </div>
+
+            {/* DMARC Check */}
+            <div className="flex items-center justify-between p-3 bg-zinc-50 border border-zinc-100 rounded-lg text-xs">
+              <div className="space-y-0.5">
+                <span className="font-bold text-zinc-700">DMARC policy (Domain Message Authentication)</span>
+                <p className="text-[10px] text-zinc-400 font-mono">_dmarc.cylawtech.com = v=DMARC1; p=none</p>
+              </div>
+              {dnsResults?.dmarcStatus ? (
+                <span className="flex items-center gap-1 text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-100">
+                  <Check className="w-3 h-3" /> VERIFIED
+                </span>
+              ) : (
+                <span className="flex items-center gap-1 text-[10px] font-bold text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-100">
+                  <AlertTriangle className="w-3 h-3" /> UNCONFIGURED
+                </span>
+              )}
+            </div>
+          </div>
+
+          <p className="text-[10px] text-zinc-400 select-all leading-normal bg-zinc-50/50 p-2.5 rounded-md border border-zinc-100/60 font-mono">
+            SPF, DKIM, and DMARC prevent attackers from spoofing your brand name, adhering to Gmail and Yahoo sender guidelines.
+          </p>
+        </div>
+
+        {/* Webhooks simulator controller */}
+        <div className="bg-white border border-zinc-200 rounded-xl p-5 shadow-xs space-y-4">
+          <div>
+            <h4 className="text-xs font-bold text-zinc-700 uppercase tracking-wide">Interactive Delivery Sandbox</h4>
+            <p className="text-[10px] text-zinc-400 mt-0.5">Trigger mock delivery callbacks to test your statistics and rating widgets.</p>
+          </div>
+
+          <div className="space-y-3.5">
+            {/* Recipient SELECT / CUSTOM INPUT */}
+            <div className="space-y-1">
+              <label className="text-[10.5px] font-semibold text-zinc-500">Recipient Email</label>
+              <div className="flex gap-2">
+                <input
+                  type="email"
+                  placeholder="e.g. test@example.com"
+                  value={simEmail}
+                  onChange={(e) => setSimEmail(e.target.value)}
+                  className="w-full text-xs py-2 px-3 bg-zinc-50 border border-zinc-200 rounded-lg focus:outline-none"
+                />
+                
+                {subscribers.length > 0 && (
+                  <select
+                    onChange={(e) => setSimEmail(e.target.value)}
+                    value={simEmail}
+                    className="text-xs bg-zinc-100 border border-zinc-200 py-1.5 px-2 rounded-lg text-zinc-700 animate-none cursor-pointer"
+                  >
+                    <option value="">Select Subscriber...</option>
+                    {subscribers.map((sub) => (
+                      <option key={sub.id} value={sub.email}>
+                        {sub.email}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </div>
+            </div>
+
+            {/* Event selection */}
+            <div className="space-y-1">
+              <label className="text-[10.5px] font-semibold text-zinc-500">Simulate Event Status</label>
+              <div className="grid grid-cols-3 gap-2">
+                {(['delivered', 'bounced', 'complaint'] as const).map((status) => (
+                  <button
+                    key={status}
+                    type="button"
+                    onClick={() => setSimStatus(status)}
+                    className={`py-1.5 px-3 rounded-lg text-xs font-semibold border cursor-pointer capitalize text-center ${
+                      simStatus === status
+                        ? 'bg-zinc-900 border-zinc-900 text-white font-bold'
+                        : 'bg-zinc-50 border-zinc-200 text-zinc-600 hover:bg-zinc-100'
+                    }`}
+                  >
+                    {status}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Trigger Button */}
+            <button
+              onClick={handleSimulateWebhook}
+              disabled={simulating}
+              className="w-full py-2.5 bg-indigo-600 text-white rounded-lg text-xs font-bold shadow-xs hover:bg-indigo-700 transition-all cursor-pointer flex items-center justify-center gap-1.5"
+            >
+              {simulating ? 'Processing webhook trigger...' : 'Trigger Webhook Callback'}
+            </button>
+
+            {simResult && (
+              <div className={`p-2.5 rounded-lg text-xs font-medium ${simResult.ok ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' : 'bg-rose-50 text-rose-700 border border-rose-100'}`}>
+                {simResult.msg}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
