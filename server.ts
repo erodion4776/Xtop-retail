@@ -1,7 +1,7 @@
 import express from "express";
 import path from "path";
 import { createServer as createViteServer } from "vite";
-import { Resend } from "resend";
+import { getResend } from "./server/resend.js";
 import { supabaseAdmin } from "./server/supabase.js";
 import { checkDomains } from "./server/dns.js";
 import { sendEmail } from "./server/emailService.js";
@@ -21,24 +21,11 @@ function logEnvironmentDiagnostic() {
     console.log("------------------------------");
 }
 
-let resendClient: Resend | null = null;
 const debugLogs: { timestamp: string, message: string, type: string }[] = [];
 
 function addDebugLog(type: string, message: string) {
     debugLogs.push({ timestamp: new Date().toISOString(), type, message });
     console.log(`[DEBUG/${type}] ${message}`);
-}
-
-function getResend() {
-    if (!resendClient) {
-        const key = process.env.RESEND_API_KEY;
-        if (!key) {
-            console.error("RESEND_API_KEY is not set!");
-            throw new Error("RESEND_API_KEY is not set");
-        }
-        resendClient = new Resend(key);
-    }
-    return resendClient;
 }
 
 // Background job scheduler: Check pending domains every 15 minutes

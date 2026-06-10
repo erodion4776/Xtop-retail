@@ -1,4 +1,4 @@
-import { getResend } from '../server.js';
+import { getResend } from './resend.js';
 import { logEmail } from './logger.js';
 import { renderTemplate } from './templateEngine.js';
 import { supabaseAdmin } from './supabase.js';

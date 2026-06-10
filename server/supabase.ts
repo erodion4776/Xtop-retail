@@ -6,6 +6,9 @@ const supabaseUrl = process.env.VITE_SUPABASE_URL ? process.env.VITE_SUPABASE_UR
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY ? process.env.SUPABASE_SERVICE_ROLE_KEY.trim() : "";
 
 console.log("Initializing Supabase with URL:", supabaseUrl);
+if (supabaseUrl.length > 50) {
+    console.log("URL looks very long, please verify it is the API URL and not a long dashboard URL.");
+}
 
 if (!supabaseUrl || !supabaseServiceKey) {
   throw new Error('Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY environment variables.');
