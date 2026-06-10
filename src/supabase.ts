@@ -135,8 +135,7 @@ export async function fetchSubscribersFromDB(tenantId: string): Promise<Subscrib
     const { data, error } = await supabase
       .from('subscribers')
       .select('*, tenants(brand_name)')
-      .eq('tenant_id', tenantId) 
-      .order('created_at', { ascending: false });
+      .eq('tenant_id', tenantId);
 
     console.log('Fetch result:', { data, error });
     if (error) {
@@ -151,7 +150,7 @@ export async function fetchSubscribersFromDB(tenantId: string): Promise<Subscrib
       name: row.name || 'N/A',
       site_name: row.tenants?.brand_name || 'Direct',
       client_id: row.tenant_id, // Map tenant_id to client_id for UI
-      date_added: new Date(row.created_at).toISOString().replace('T', ' ').slice(0, 16),
+      date_added: row.created_at ? new Date(row.created_at).toISOString().replace('T', ' ').slice(0, 16) : 'N/A',
       status: (row.status || 'active') as any,
     }));
   } catch (err) {
