@@ -60,7 +60,9 @@ export default function SubscribersView({
   // Filter subscribers list
   const filteredSubscribers = subscribers.filter((sub) => {
     const matchesSearch = sub.email.toLowerCase().includes(search.toLowerCase()) || 
-                          sub.client_id.toLowerCase().includes(search.toLowerCase());
+                          (sub.client_id && sub.client_id.toLowerCase().includes(search.toLowerCase())) ||
+                          (sub.name && sub.name.toLowerCase().includes(search.toLowerCase())) ||
+                          (sub.site_name && sub.site_name.toLowerCase().includes(search.toLowerCase()));
     const matchesFilter = statusFilter === 'all' ? true : sub.status === statusFilter;
     return matchesSearch && matchesFilter;
   });
@@ -220,7 +222,8 @@ export default function SubscribersView({
             <thead>
               <tr className="bg-zinc-50 border-b border-zinc-150 text-[10px] font-bold text-zinc-500 uppercase tracking-wider">
                 <th className="py-3 px-5">Email Address</th>
-                <th className="py-3 px-5">Client ID</th>
+                <th className="py-3 px-5">Name</th>
+                <th className="py-3 px-5">Site</th>
                 <th className="py-3 px-5">Date Added</th>
                 <th className="py-3 px-5 text-center">Status</th>
                 <th className="py-3 px-5 text-right">Actions</th>
@@ -229,7 +232,7 @@ export default function SubscribersView({
             <tbody className="divide-y divide-zinc-100 text-xs font-medium text-zinc-700">
               {filteredSubscribers.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="py-12 text-center text-zinc-400">
+                  <td colSpan={6} className="py-12 text-center text-zinc-400">
                     <Layers className="w-8 h-8 text-zinc-300 mx-auto mb-2.5" />
                     <p className="font-semibold text-zinc-500">No subscribers found</p>
                     <p className="text-[10px] text-zinc-400 mt-1">Try adjusting your query or insert fresh contacts.</p>
@@ -247,7 +250,8 @@ export default function SubscribersView({
                           <span className="font-semibold text-zinc-900">{sub.email}</span>
                         </div>
                       </td>
-                      <td className="py-3.5 px-5 font-mono text-[11px] text-zinc-500">{sub.client_id}</td>
+                      <td className="py-3.5 px-5 text-zinc-600 font-medium">{sub.name || '-'}</td>
+                      <td className="py-3.5 px-5 text-zinc-500 font-medium">{sub.site_name || '-'}</td>
                       <td className="py-3.5 px-5 text-zinc-400 text-[11px]">{sub.date_added}</td>
                       <td className="py-3.5 px-5 text-center">
                         <span

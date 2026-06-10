@@ -145,8 +145,7 @@ export async function fetchSubscribersFromDB(clientId: string): Promise<Subscrib
   try {
     const { data, error } = await supabase
       .from('subscribers')
-      .select('*')
-      .eq('client_id', clientId)
+      .select('*, tenants(brand_name)')
       .order('created_at', { ascending: false });
 
     if (error) {
@@ -158,6 +157,8 @@ export async function fetchSubscribersFromDB(clientId: string): Promise<Subscrib
     return (data || []).map((row: any) => ({
       id: row.id,
       email: row.email,
+      name: row.name || 'N/A',
+      site_name: row.tenants?.brand_name || 'Direct',
       client_id: row.client_id,
       date_added: new Date(row.created_at).toISOString().replace('T', ' ').slice(0, 16),
       status: (row.status || 'active') as any,

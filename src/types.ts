@@ -1,7 +1,9 @@
 export interface Subscriber {
   id: string;
   email: string;
-  client_id: string;
+  name?: string;
+  site_name?: string;
+  client_id?: string;
   date_added: string;
   status: 'active' | 'unsubscribed' | 'pending';
 }
