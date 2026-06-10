@@ -8,6 +8,7 @@ import { sendEmail } from "./server/emailService.js";
 import { siteConfigs } from "./server/emailConfig.js";
 import { logEmail } from "./server/logger.js";
 import dotenv from "dotenv";
+import cors from "cors";
 
 dotenv.config({ silent: true });
 
@@ -53,9 +54,39 @@ setInterval(async () => {
     }
 }, 15 * 60 * 1000);
 
+async function seedTenantsIfEmpty() {
+  try {
+    const { count, error } = await supabaseAdmin.from('tenants').select('*', { count: 'exact', head: true });
+    if (error) {
+      console.error("Failed to check tenants table (it might not be created yet):", error.message);
+      return;
+    }
+    if (count === 0) {
+      console.log("Seeding tenants from local siteConfigs...");
+      const dbTenants = siteConfigs.map(s => ({
+        site_key: s.siteKey,
+        brand_name: s.brandName,
+        sender_name: s.senderName,
+        primary_color: s.primaryColor,
+        logo_url: s.logo
+      }));
+      const { error: insertError } = await supabaseAdmin.from('tenants').insert(dbTenants);
+      if (insertError) {
+        console.error("Failed to seed tenants:", insertError.message);
+      } else {
+        console.log("Tenants seeded successfully.");
+      }
+    }
+  } catch (e: any) {
+    console.error("Error during tenant seeding:", e.message);
+  }
+}
+
 async function startServer() {
   logEnvironmentDiagnostic();
+  await seedTenantsIfEmpty();
   const app = express();
+  app.use(cors()); // Allow anyone to send API requests (HTML embed/External integrations)
   app.use(express.json());
   const PORT = 3000;
 
@@ -139,6 +170,81 @@ async function startServer() {
           res.json({ success: true });
       } catch (e: any) {
           res.status(500).json({ error: e.message });
+      }
+  });
+
+  // POST /api/external/subscribe - Public CORS-enabled endpoint for external integration (e.g. https://xtop-retail.onrender.com/)
+  app.post("/api/external/subscribe", async (req: any, res: any) => {
+      const { siteKey, email, name } = req.body;
+      
+      if (!email || !email.includes('@')) {
+          return res.status(400).json({ success: false, error: "Valid email is required" });
+      }
+      
+      const key = siteKey || "cyvisahelp";
+      
+      try {
+          // 1. Fetch tenant ID
+          let { data: tenant } = await supabaseAdmin.from('tenants').select('id, brand_name').eq('site_key', key).single();
+          
+          if (!tenant) {
+              // Try to find local config to auto-seed this tenant
+              const config = siteConfigs.find(s => s.siteKey === key);
+              if (config) {
+                  const { data: newTenant, error: insertErr } = await supabaseAdmin.from('tenants').insert({
+                      site_key: config.siteKey,
+                      brand_name: config.brandName,
+                      sender_name: config.senderName,
+                      primary_color: config.primaryColor,
+                      logo_url: config.logo
+                  }).select().single();
+                  
+                  if (!insertErr && newTenant) {
+                      tenant = { id: newTenant.id, brand_name: newTenant.brand_name };
+                  }
+              }
+          }
+          
+          if (!tenant) {
+              return res.status(400).json({ success: false, error: `Tenant with siteKey "${key}" not found and cannot be initialized.` });
+          }
+          
+          // 2. Check if subscriber already exists
+          const { data: existing } = await supabaseAdmin
+              .from('subscribers')
+              .select('id')
+              .eq('email', email)
+              .eq('tenant_id', tenant.id)
+              .maybeSingle();
+              
+          let subscriber = existing;
+          if (!existing) {
+              // 3. Register subscriber
+              const { data, error } = await supabaseAdmin
+                  .from('subscribers')
+                  .insert({ email, tenant_id: tenant.id, status: 'active' })
+                  .select()
+                  .single();
+              if (error) throw error;
+              subscriber = data;
+          }
+          
+          // 4. Trigger Welcome Automation
+          try {
+              await sendEmail({ 
+                 siteKey: key, 
+                 to: email, 
+                 templateName: 'welcome', 
+                 variables: { name: name || 'there', email, website_name: tenant.brand_name } 
+              });
+          } catch (mailErr: any) {
+              console.error("Failed to dynamically welcome external subscriber:", mailErr.message);
+          }
+          
+          res.json({ success: true, message: `Subscribed successfully to ${tenant.brand_name}`, subscriber });
+      } catch (e: any) {
+          console.error("External subscription integration error:", e.message);
+          res.status(500).json({ success: false, error: e.message });
       }
   });
 

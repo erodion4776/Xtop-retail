@@ -38,7 +38,7 @@ const DEFAULT_WELCOME: WelcomeTemplate = {
   enabled: true,
 };
 
-type ActiveTab = 'send' | 'welcome' | 'subscribers' | 'logs';
+type ActiveTab = 'send' | 'welcome' | 'subscribers' | 'logs' | 'integration';
 
 export default function EmailCenter() {
   const [activeTab, setActiveTab] = useState<ActiveTab>('send');
@@ -167,6 +167,7 @@ export default function EmailCenter() {
     { id: 'welcome', label: 'Welcome Email', icon: Mail },
     { id: 'subscribers', label: `Subscribers (${subscribers.length})`, icon: Users },
     { id: 'logs', label: 'Email Logs', icon: History },
+    { id: 'integration', label: 'Connect Website', icon: Building2 },
   ];
 
   return (
@@ -458,6 +459,165 @@ export default function EmailCenter() {
               ))}
             </div>
           )}
+        </div>
+      )}
+
+      {/* CONNECT WEBSITE / INTEGRATION TAB */}
+      {activeTab === 'integration' && (
+        <div className="bg-white border border-zinc-200 rounded-xl p-6 shadow-xs space-y-6">
+          <div>
+            <h3 className="font-bold text-sm text-zinc-900">Connect Your External Website</h3>
+            <p className="text-xs text-zinc-500 mt-0.5">
+              Integrate your retail store (<span className="underline font-medium text-indigo-600">https://xtop-retail.onrender.com</span>) or other pages to collect leads and trigger instant welcomes.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {/* Left sidebar: Site selector */}
+            <div className="space-y-4">
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-zinc-600">Target Website Brand</label>
+                <div className="space-y-2">
+                  {siteConfigs.map((s) => (
+                    <button
+                      key={s.siteKey}
+                      onClick={() => setSiteKey(s.siteKey)}
+                      className={`w-full flex items-center gap-3 p-3 text-align-left rounded-lg border text-xs font-semibold transition-all cursor-pointer text-left ${
+                        siteKey === s.siteKey
+                          ? 'border-indigo-600 bg-indigo-50/50 text-indigo-900'
+                          : 'border-zinc-200 bg-white hover:bg-zinc-50 text-zinc-700'
+                      }`}
+                    >
+                      <img src={s.logo} className="w-6 h-6 rounded-full shrink-0" />
+                      <div>
+                        <p className="font-bold">{s.brandName}</p>
+                        <p className="text-[10px] text-zinc-400 font-normal">{s.website}</p>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="p-3 bg-indigo-50 border border-indigo-100 rounded-lg text-[11px] text-indigo-800 space-y-1.5 leading-relaxed">
+                <p className="font-bold flex items-center gap-1">
+                  💡 Dynamic Branding Architecture
+                </p>
+                <p>
+                  Incoming leads tagged with <code className="font-mono bg-indigo-100 px-1 rounded">siteKey: "{siteKey}"</code> will automatically receive customized emails branded with <strong>{siteConfigs.find(s => s.siteKey === siteKey)?.brandName}</strong> colors, sender names, and logos.
+                </p>
+              </div>
+            </div>
+
+            {/* Right details: Code generator */}
+            <div className="md:col-span-2 space-y-5">
+              {/* Box 1: Drop-in HTML form code */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <h4 className="font-bold text-xs text-zinc-800">1. Instant HTML Form Snippet</h4>
+                  <span className="text-[10px] bg-emerald-50 text-emerald-700 font-semibold px-2 py-0.5 rounded">Ready to Embed</span>
+                </div>
+                <p className="text-[11px] text-zinc-500">
+                  Copy and paste this production-ready stylesheet and signup form anywhere on your retail site.
+                </p>
+
+                <div className="relative">
+                  <textarea
+                    readOnly
+                    rows={8}
+                    className="w-full text-[11px] font-mono p-3 bg-zinc-900 text-zinc-300 border border-zinc-800 rounded-lg focus:outline-none resize-none leading-relaxed"
+                    value={`<!-- Paste this into your website at https://xtop-retail.onrender.com/ -->
+<div id="cy-newsletter-embed" style="font-family: system-ui, sans-serif; max-width: 400px; padding: 24px; border: 1px solid #e4e4e7; border-radius: 12px; background: #ffffff;">
+  <h3 style="margin: 0 0 8px 0; font-size: 16px; font-weight: 700; color: #18181b;">Subscribe to our updates</h3>
+  <p style="margin: 0 0 16px 0; font-size: 12px; color: #71717a;">Get instant updates and newsletters from ${siteConfigs.find(s => s.siteKey === siteKey)?.brandName}.</p>
+  
+  <form id="cy-subscribe-form" style="display: flex; flex-direction: column; gap: 8px;">
+    <input type="email" id="cy-email-input" placeholder="Enter your email" required style="padding: 10px 12px; font-size: 13px; border: 1px solid #e4e4e7; border-radius: 6px; outline: none; background: #f4f4f5;" />
+    <button type="submit" id="cy-submit-btn" style="padding: 10px; font-size: 13px; font-weight: 600; color: #ffffff; background: ${siteConfigs.find(s => s.siteKey === siteKey)?.primaryColor}; border: none; border-radius: 6px; cursor: pointer;">
+      Subscribe
+    </button>
+  </form>
+  <p id="cy-status-msg" style="margin-top: 10px; font-size: 11px; display: none;"></p>
+</div>
+
+<script>
+  document.getElementById("cy-subscribe-form").addEventListener("submit", async function(e) {
+    e.preventDefault();
+    const email = document.getElementById("cy-email-input").value;
+    const btn = document.getElementById("cy-submit-btn");
+    const msg = document.getElementById("cy-status-msg");
+    
+    btn.disabled = true;
+    btn.textContent = "Subscribing...";
+    msg.style.display = "none";
+    
+    try {
+      const res = await fetch("\${window.location.protocol}//\${window.location.host}/api/external/subscribe", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: email, siteKey: "${siteKey}" })
+      });
+      const data = await res.json();
+      
+      if (res.ok && data.success) {
+        msg.textContent = "🎉 " + data.message;
+        msg.style.color = "#16a34a";
+        document.getElementById("cy-email-input").value = "";
+      } else {
+        msg.textContent = "❌ " + (data.error || "Subscription failed");
+        msg.style.color = "#dc2626";
+      }
+    } catch (err) {
+      msg.textContent = "❌ Connection with CY Email Engine failed.";
+      msg.style.color = "#dc2626";
+    } finally {
+      btn.disabled = false;
+      btn.textContent = "Subscribe";
+      msg.style.display = "block";
+    }
+  });
+</sc` + `ript>`}
+                  />
+                </div>
+              </div>
+
+              {/* Box 2: REST API fetch Request */}
+              <div className="space-y-2">
+                <h4 className="font-bold text-xs text-zinc-800">2. Programmatic Integration (Fetch API)</h4>
+                <p className="text-[11px] text-zinc-500">
+                  Trigger subscription programmatically in your custom Javascript or React apps.
+                </p>
+                <div className="relative">
+                  <pre className="text-[11px] font-mono p-3 bg-zinc-900 text-zinc-300 border border-zinc-800 rounded-lg overflow-x-auto leading-relaxed">
+{`fetch("\${window.location.origin}/api/external/subscribe", {
+  method: "POST",
+  headers: {
+    "Content-Type": "application/json"
+  },
+  body: JSON.stringify({
+    siteKey: "${siteKey}",
+    email: "customer@example.com",
+    name: "John Doe"
+  })
+})
+.then(res => res.json())
+.then(data => console.log("CY Engine Response:", data));`}
+                  </pre>
+                </div>
+              </div>
+
+              {/* Box 3: curl Request */}
+              <div className="space-y-2">
+                <h4 className="font-bold text-xs text-zinc-800">3. Backend / Terminal Test (cURL)</h4>
+                <div className="relative">
+                  <pre className="text-[11px] font-mono p-3 bg-zinc-900 text-zinc-300 border border-zinc-800 rounded-lg overflow-x-auto leading-relaxed">
+{`curl -X POST "\${window.location.origin}/api/external/subscribe" \\
+  -H "Content-Type: application/json" \\
+  -d '{"siteKey": "${siteKey}", "email": "test-user@domain.com", "name": "Jane Doe"}'`}
+                  </pre>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </div>
