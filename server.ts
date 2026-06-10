@@ -241,9 +241,11 @@ async function startServer() {
               console.error("Failed to dynamically welcome external subscriber:", mailErr.message);
           }
           
+          await logEmail(email, `External Subscription: ${tenant.brand_name}`, `Subscriber: ${email}`, 'subscription_attempt', 'sent');
           res.json({ success: true, message: `Subscribed successfully to ${tenant.brand_name}`, subscriber });
       } catch (e: any) {
           console.error("External subscription integration error:", e.message);
+          await logEmail(email, `Failed Subscription: ${key}`, e.message, 'subscription_attempt', 'failed');
           res.status(500).json({ success: false, error: e.message });
       }
   });

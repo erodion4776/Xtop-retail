@@ -38,7 +38,7 @@ const DEFAULT_WELCOME: WelcomeTemplate = {
   enabled: true,
 };
 
-type ActiveTab = 'send' | 'welcome' | 'subscribers' | 'logs' | 'integration';
+type ActiveTab = 'send' | 'welcome' | 'subscribers' | 'logs' | 'integration' | 'debug';
 
 export default function EmailCenter() {
   const [activeTab, setActiveTab] = useState<ActiveTab>('send');
@@ -168,6 +168,7 @@ export default function EmailCenter() {
     { id: 'subscribers', label: `Subscribers (${subscribers.length})`, icon: Users },
     { id: 'logs', label: 'Email Logs', icon: History },
     { id: 'integration', label: 'Connect Website', icon: Building2 },
+    { id: 'debug', label: 'Debug Logs', icon: AlertCircle },
   ];
 
   return (
@@ -618,6 +619,40 @@ export default function EmailCenter() {
               </div>
             </div>
           </div>
+        </div>
+      )}
+      {/* DEBUG LOGS TAB */}
+      {activeTab === 'debug' && (
+        <div className="bg-white border border-zinc-200 rounded-xl p-6 shadow-xs space-y-4">
+          <h3 className="font-bold text-sm text-zinc-900">Subscription Attempt Logs</h3>
+          <p className="text-xs text-zinc-500">Monitoring internal subscription attempts.</p>
+
+          {!logs || logs.filter(l => l.type === 'subscription_attempt').length === 0 ? (
+            <p className="text-xs text-zinc-400 py-6 text-center">No subscription attempts found.</p>
+          ) : (
+            <div className="divide-y divide-zinc-100">
+              {logs.filter(l => l.type === 'subscription_attempt').map((log, i) => (
+                <div key={i} className="flex items-center justify-between py-3 gap-4">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs font-semibold text-zinc-800 truncate">{log.subject}</p>
+                    <p className="text-[11px] text-zinc-500 mt-0.5 truncate">Details: {log.to}</p>
+                  </div>
+                  <div className="flex items-center gap-3 shrink-0">
+                    <span className="text-[10px] text-zinc-400 font-mono">
+                      {log.created_at ? new Date(log.created_at).toLocaleString() : ''}
+                    </span>
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${
+                      log.status === 'sent'
+                        ? 'bg-emerald-50 text-emerald-700'
+                        : 'bg-rose-50 text-rose-700'
+                    }`}>
+                      {log.status?.toUpperCase()}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>
