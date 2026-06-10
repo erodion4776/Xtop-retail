@@ -73,6 +73,19 @@ export default function App() {
     initDatabase();
   }, []);
 
+  // Refresh data when navigating back to dashboard
+  useEffect(() => {
+    if (activeTab === 'dashboard' && activeClient) {
+      async function reloadData() {
+        const subs = await fetchSubscribersFromDB(activeClient!.id);
+        const camps = await fetchCampaignsFromDB(activeClient!.id);
+        setSubscribers(subs);
+        setCampaigns(camps);
+      }
+      reloadData();
+    }
+  }, [activeTab, activeClient]);
+
   // Wrap state setting in transition for rendering responsiveness
   const setActiveTab = (tab: ActiveTab) => {
     startTransition(() => {
