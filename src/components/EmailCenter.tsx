@@ -627,8 +627,25 @@ export default function EmailCenter() {
       {/* DEBUG LOGS TAB */}
       {activeTab === 'debug' && (
         <div className="bg-white border border-zinc-200 rounded-xl p-6 shadow-xs space-y-4">
-          <h3 className="font-bold text-sm text-zinc-900">Subscription Attempt Logs</h3>
-          <p className="text-xs text-zinc-500">Monitoring internal subscription attempts.</p>
+          <div className="flex justify-between items-center">
+            <div>
+              <h3 className="font-bold text-sm text-zinc-900">Subscription Attempt Logs</h3>
+              <p className="text-xs text-zinc-500">Monitoring internal subscription attempts.</p>
+            </div>
+            <button 
+              onClick={async () => {
+                try {
+                  const res = await fetch('/api/health-check');
+                  const data = await res.json();
+                  alert(res.ok ? `Connected: ${JSON.stringify(data)}` : `Error: ${data.message}`);
+                  fetchData();
+                } catch(e) { alert('Connection error'); }
+              }}
+              className="text-xs px-3 py-1.5 bg-zinc-900 text-white rounded hover:bg-zinc-800"
+            >
+              Check Connection
+            </button>
+          </div>
 
           {!debugLogs || debugLogs.length === 0 ? (
             <p className="text-xs text-zinc-400 py-6 text-center">No debug logs yet.</p>

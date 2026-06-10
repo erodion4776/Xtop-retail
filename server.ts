@@ -268,6 +268,18 @@ async function startServer() {
   app.get("/api/debug-logs", (req: any, res: any) => {
     res.json(debugLogs.slice(-100));
   });
+
+  app.get("/api/health-check", async (req: any, res: any) => {
+    try {
+      const { count, error } = await supabaseAdmin.from('tenants').select('*', { count: 'exact', head: true });
+      if (error) throw error;
+      addDebugLog('INFO', 'Supabase connection successful.');
+      res.json({ status: 'connected', tenantCount: count });
+    } catch (e: any) {
+      addDebugLog('ERROR', `Supabase connection failed: ${e.message}`);
+      res.status(500).json({ status: 'error', message: e.message });
+    }
+  });
   
   // Basic in-memory rate limiter per IP (simplistic MVP protection)
   const ipRateLimit = new Map<string, number[]>();
