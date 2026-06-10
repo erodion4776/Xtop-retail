@@ -65,40 +65,28 @@ export async function getOrCreateClient(email: string, name: string): Promise<DB
   }
 
   try {
-    // 1. Check if client with this sender_email exists
+    // Check if any tenant exists, fetch the first one for isolation
     const { data, error } = await supabase
-      .from('clients')
+      .from('tenants')
       .select('*')
-      .eq('sender_email', email)
+      .limit(1)
       .maybeSingle();
 
     if (error) {
-      console.warn('Supabase fetch client error, falling back:', error.message);
+      console.warn('Supabase fetch tenant error, falling back:', error.message);
       return defaultClient;
     }
 
     if (data) {
-      return data as DBClient;
+      return {
+        id: data.id,
+        name: data.brand_name,
+        sender_email: email, // Keep email for convenience
+        created_at: new Date().toISOString()
+      };
     }
-
-    // 2. Insert fresh client profile
-    const newClientObj = {
-      name,
-      sender_email: email,
-    };
-
-    const { data: inserted, error: insertError } = await supabase
-      .from('clients')
-      .insert([newClientObj])
-      .select('*')
-      .single();
-
-    if (insertError) {
-      console.error('Supabase create client failed:', insertError.message);
-      return defaultClient;
-    }
-
-    return inserted as DBClient;
+    
+    return defaultClient;
   } catch (err: any) {
     console.error('Supabase error in getOrCreateClient:', err);
     return defaultClient;
@@ -136,17 +124,18 @@ export async function updateClientSender(clientId: string, newEmail: string, new
  * 2. SUBSCRIBERS DB INTERACTION
  * Fetch, Filter, Create and Delete subscribers.
  */
-export async function fetchSubscribersFromDB(clientId: string): Promise<Subscriber[]> {
-  console.log('Fetching subscribers for clientId:', clientId);
+export async function fetchSubscribersFromDB(tenantId: string): Promise<Subscriber[]> {
+  console.log('Fetching subscribers for tenantId:', tenantId);
   if (!SUPABASE_CONFIGURED || !supabase) {
     const fallbackList: Subscriber[] = getLocalData<Subscriber[]>('subscribers', []);
-    return fallbackList.filter(s => s.client_id === clientId);
+    return fallbackList.filter(s => s.client_id === tenantId); // Keep client_id in UI layer for compatibility if needed
   }
 
   try {
     const { data, error } = await supabase
       .from('subscribers')
       .select('*, tenants(brand_name)')
+      .eq('tenant_id', tenantId) 
       .order('created_at', { ascending: false });
 
     console.log('Fetch result:', { data, error });
@@ -161,10 +150,10 @@ export async function fetchSubscribersFromDB(clientId: string): Promise<Subscrib
       email: row.email,
       name: row.name || 'N/A',
       site_name: row.tenants?.brand_name || 'Direct',
-      client_id: row.client_id,
+      client_id: row.tenant_id, // Map tenant_id to client_id for UI
       date_added: new Date(row.created_at).toISOString().replace('T', ' ').slice(0, 16),
       status: (row.status || 'active') as any,
-    })).filter(sub => sub.client_id === clientId || !sub.client_id); // Filter client-side
+    }));
   } catch (err) {
     console.error('Unexpected subscribers fetch error:', err);
     return [];
@@ -172,7 +161,7 @@ export async function fetchSubscribersFromDB(clientId: string): Promise<Subscrib
 }
 
 export async function addSubscriberToDB(
-  clientId: string,
+  tenantId: string,
   email: string,
   status: 'active' | 'unsubscribed' | 'pending'
 ): Promise<Subscriber | null> {
@@ -182,7 +171,7 @@ export async function addSubscriberToDB(
   const newSubscriberObj: Subscriber = {
     id: tempId,
     email,
-    client_id: clientId,
+    client_id: tenantId,
     status,
     date_added: nowStr,
   };
@@ -200,7 +189,7 @@ export async function addSubscriberToDB(
       .insert([
         {
           email,
-          client_id: clientId,
+          tenant_id: tenantId,
           status,
         },
       ])
@@ -215,7 +204,7 @@ export async function addSubscriberToDB(
     return {
       id: data.id,
       email: data.email,
-      client_id: data.client_id,
+      client_id: data.tenant_id,
       date_added: new Date(data.created_at).toISOString().replace('T', ' ').slice(0, 16),
       status: data.status as any,
     };
@@ -250,7 +239,7 @@ export async function deleteSubscriberFromDB(id: string): Promise<boolean> {
  * 3. CAMPAIGNS DB INTERACTION
  * Fetch campaigns and create campaigns.
  */
-export async function fetchCampaignsFromDB(clientId: string): Promise<Campaign[]> {
+export async function fetchCampaignsFromDB(tenantId: string): Promise<Campaign[]> {
   if (!SUPABASE_CONFIGURED || !supabase) {
     const fallbackList = getLocalData<Campaign[]>('campaigns', []);
     return fallbackList;
@@ -260,7 +249,7 @@ export async function fetchCampaignsFromDB(clientId: string): Promise<Campaign[]
     const { data, error } = await supabase
       .from('campaigns')
       .select('*')
-      .eq('client_id', clientId)
+      .eq('tenant_id', tenantId)
       .order('created_at', { ascending: false });
 
     if (error) {
@@ -304,7 +293,7 @@ export async function fetchCampaignsFromDB(clientId: string): Promise<Campaign[]
 }
 
 export async function createCampaignInDB(
-  clientId: string,
+  tenantId: string,
   newCamp: Omit<Campaign, 'id' | 'open_rate' | 'click_rate' | 'date_created'>
 ): Promise<Campaign | null> {
   const tempId = `camp_${Date.now()}`;
@@ -343,7 +332,7 @@ export async function createCampaignInDB(
       .from('campaigns')
       .insert([
         {
-          client_id: clientId,
+          tenant_id: tenantId,
           subject: newCamp.subject,
           content: packedMetadata,
           status: newCamp.status,
