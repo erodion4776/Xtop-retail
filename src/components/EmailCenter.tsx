@@ -588,7 +588,7 @@ export default function EmailCenter() {
                 </p>
                 <div className="relative">
                   <pre className="text-[11px] font-mono p-3 bg-zinc-900 text-zinc-300 border border-zinc-800 rounded-lg overflow-x-auto leading-relaxed">
-{`fetch("\${window.location.origin}/api/external/subscribe", {
+{`fetch("https://xtop-retail.onrender.com/api/external/subscribe", {
   method: "POST",
   headers: {
     "Content-Type": "application/json"
@@ -610,7 +610,7 @@ export default function EmailCenter() {
                 <h4 className="font-bold text-xs text-zinc-800">3. Backend / Terminal Test (cURL)</h4>
                 <div className="relative">
                   <pre className="text-[11px] font-mono p-3 bg-zinc-900 text-zinc-300 border border-zinc-800 rounded-lg overflow-x-auto leading-relaxed">
-{`curl -X POST "\${window.location.origin}/api/external/subscribe" \\
+{`curl -X POST "https://xtop-retail.onrender.com/api/external/subscribe" \\
   -H "Content-Type: application/json" \\
   -d '{"siteKey": "${siteKey}", "email": "test-user@domain.com", "name": "Jane Doe"}'`}
                   </pre>
