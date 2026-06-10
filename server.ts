@@ -216,7 +216,7 @@ async function startServer() {
               // 3. Register subscriber
               const { data, error } = await supabaseAdmin
                   .from('subscribers')
-                  .insert({ email, tenant_id: tenant.id, status: 'active' })
+                  .insert({ email, name, tenant_id: tenant.id, status: 'active' })
                   .select()
                   .single();
               if (error) throw error;
@@ -282,7 +282,7 @@ async function startServer() {
     recent.push(now);
     ipRateLimit.set(ip, recent);
 
-    const { email, client_id } = req.body;
+    const { email, name, client_id } = req.body;
     
     // 1. Validation
     if (!email || !email.includes('@') || !client_id) {
@@ -301,7 +301,7 @@ async function startServer() {
     // 3. Insert to Supabase with tenant isolation
     const { data: subscriber, error } = await supabaseAdmin
       .from('subscribers')
-      .insert([{ email, client_id, status: 'active' }])
+      .insert([{ email, name, client_id, status: 'active' }])
       .select('*')
       .single();
       

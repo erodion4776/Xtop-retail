@@ -103,7 +103,7 @@ export default function App() {
     const response = await fetch('/api/subscribe', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: newSub.email, client_id: activeClient.id }),
+      body: JSON.stringify({ email: newSub.email, name: newSub.name, client_id: activeClient.id }),
     });
 
     if (response.ok) {

@@ -19,6 +19,7 @@ export default function SubscribersView({
   
   // Form fields
   const [newEmail, setNewEmail] = useState('');
+  const [newName, setNewName] = useState(''); // Added
   const [newClientId, setNewClientId] = useState('');
   const [newStatus, setNewStatus] = useState<'active' | 'unsubscribed' | 'pending'>('active');
   const [formError, setFormError] = useState('');
@@ -46,12 +47,14 @@ export default function SubscribersView({
     // Call callback
     onAddSubscriber({
       email: newEmail.trim().toLowerCase(),
+      name: newName.trim(), // Added
       client_id: newClientId.trim(),
       status: newStatus,
     });
 
     // Reset view
     setNewEmail('');
+    setNewName(''); // Added
     setNewClientId('');
     setNewStatus('active');
     setIsAdding(false);
@@ -110,6 +113,18 @@ export default function SubscribersView({
                 />
                 <Mail className="absolute left-3 top-3 w-3.5 h-3.5 text-zinc-400" />
               </div>
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-zinc-600">Name</label>
+              <input
+                id="subscriber-name-input"
+                type="text"
+                placeholder="e.g., John Doe"
+                value={newName}
+                onChange={(e) => setNewName(e.target.value)}
+                className="w-full text-xs py-2.5 px-3 bg-white border border-zinc-200 rounded-lg text-zinc-800 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 font-medium"
+              />
             </div>
 
             <div className="space-y-1">
