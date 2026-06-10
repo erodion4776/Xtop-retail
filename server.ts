@@ -22,6 +22,13 @@ function logEnvironmentDiagnostic() {
 }
 
 let resendClient: Resend | null = null;
+const debugLogs: { timestamp: string, message: string, type: string }[] = [];
+
+function addDebugLog(type: string, message: string) {
+    debugLogs.push({ timestamp: new Date().toISOString(), type, message });
+    console.log(`[DEBUG/${type}] ${message}`);
+}
+
 function getResend() {
     if (!resendClient) {
         const key = process.env.RESEND_API_KEY;
@@ -238,12 +245,14 @@ async function startServer() {
                  variables: { name: name || 'there', email, website_name: tenant.brand_name } 
               });
           } catch (mailErr: any) {
+              addDebugLog('ERROR', `Failed to dynamically welcome external subscriber: ${mailErr.message}`);
               console.error("Failed to dynamically welcome external subscriber:", mailErr.message);
           }
           
           await logEmail(email, `External Subscription: ${tenant.brand_name}`, `Subscriber: ${email}`, 'subscription_attempt', 'sent');
           res.json({ success: true, message: `Subscribed successfully to ${tenant.brand_name}`, subscriber });
       } catch (e: any) {
+          addDebugLog('ERROR', `External subscription integration error: ${e.message}`);
           console.error("External subscription integration error:", e.message);
           await logEmail(email, `Failed Subscription: ${key}`, e.message, 'subscription_attempt', 'failed');
           res.status(500).json({ success: false, error: e.message });
@@ -254,6 +263,10 @@ async function startServer() {
     const { data, error } = await supabaseAdmin.from('email_logs').select('*').order('created_at', { ascending: false });
     if (error) return res.status(500).json({ error: error.message });
     res.json(data || []);
+  });
+
+  app.get("/api/debug-logs", (req: any, res: any) => {
+    res.json(debugLogs.slice(-100));
   });
   
   // Basic in-memory rate limiter per IP (simplistic MVP protection)
