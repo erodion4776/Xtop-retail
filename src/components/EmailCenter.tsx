@@ -551,7 +551,7 @@ export default function EmailCenter() {
     msg.style.display = "none";
     
     try {
-      const res = await fetch("\${window.location.protocol}//\${window.location.host}/api/external/subscribe", {
+      const res = await fetch("https://xtop-retail.onrender.com/api/external/subscribe", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: email, siteKey: "${siteKey}" })

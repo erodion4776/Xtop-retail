@@ -26,9 +26,16 @@ export function renderTemplate(template: { html_content: string; text_content: s
         return res;
     };
 
+    const isFullHtml = (str: string) => {
+        const trimmed = str.trim().toLowerCase();
+        return trimmed.startsWith('<!doctype') || trimmed.indexOf('<html') !== -1 || trimmed.indexOf('<body') !== -1;
+    };
+
+    const rawHtml = replaceVars(template.html_content);
+
     return {
         subject: replaceVars(template.subject),
-        html: wrapperHtml(replaceVars(template.html_content)),
+        html: isFullHtml(rawHtml) ? rawHtml : wrapperHtml(rawHtml),
         text: replaceVars(template.text_content)
     };
 }
