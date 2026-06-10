@@ -137,6 +137,7 @@ export async function updateClientSender(clientId: string, newEmail: string, new
  * Fetch, Filter, Create and Delete subscribers.
  */
 export async function fetchSubscribersFromDB(clientId: string): Promise<Subscriber[]> {
+  console.log('Fetching subscribers for clientId:', clientId);
   if (!SUPABASE_CONFIGURED || !supabase) {
     const fallbackList: Subscriber[] = getLocalData<Subscriber[]>('subscribers', []);
     return fallbackList.filter(s => s.client_id === clientId);
@@ -148,6 +149,7 @@ export async function fetchSubscribersFromDB(clientId: string): Promise<Subscrib
       .select('*, tenants(brand_name)')
       .order('created_at', { ascending: false });
 
+    console.log('Fetch result:', { data, error });
     if (error) {
       console.warn('Subscribers retrieve database error, return fallback:', error.message);
       return [];
@@ -162,7 +164,7 @@ export async function fetchSubscribersFromDB(clientId: string): Promise<Subscrib
       client_id: row.client_id,
       date_added: new Date(row.created_at).toISOString().replace('T', ' ').slice(0, 16),
       status: (row.status || 'active') as any,
-    }));
+    })).filter(sub => sub.client_id === clientId || !sub.client_id); // Filter client-side
   } catch (err) {
     console.error('Unexpected subscribers fetch error:', err);
     return [];
