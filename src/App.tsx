@@ -61,6 +61,8 @@ export default function App() {
         // Load subscribers and campaigns matching this client_id
         const subs = await fetchSubscribersFromDB(client.id);
         const camps = await fetchCampaignsFromDB(client.id);
+        
+        console.log('Fetched data:', { subs, camps });
 
         setSubscribers(subs);
         setCampaigns(camps);
