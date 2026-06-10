@@ -9,6 +9,7 @@ import { siteConfigs } from "./server/emailConfig.js";
 import { logEmail } from "./server/logger.js";
 import dotenv from "dotenv";
 import cors from "cors";
+import rateLimit from "express-rate-limit";
 
 dotenv.config({ silent: true });
 
@@ -106,6 +107,38 @@ async function startServer() {
           await logEmail(email, 'XTOPFlow Backend Test Email', 'Test body', 'test', 'sent');
           return res.json({ success: true, message: 'Test email sent successfully' });
       } catch (error: any) {
+          return res.status(500).json({ success: false, error: error.message });
+      }
+  });
+
+  // POST /api/send-email (Official Resend SDK Implementation)
+  const emailLimiter = rateLimit({
+      windowMs: 15 * 60 * 1000,
+      max: 5,
+      message: { error: 'Too many requests, please try again later.' }
+  });
+
+  app.post("/api/send-email", emailLimiter, async (req: any, res: any) => {
+      const { to, subject, message } = req.body;
+      if (!to || !subject || !message) {
+          return res.status(400).json({ success: false, error: 'Missing required fields: to, subject, message' });
+      }
+      if (!to.includes('@')) {
+          return res.status(400).json({ success: false, error: 'Invalid email address' });
+      }
+      
+      try {
+          await getResend().emails.send({
+              from: 'noreply@cylawtech.com',
+              to,
+              subject,
+              html: message
+          });
+          // Also log it if needed
+          await logEmail(to, subject, message, 'api_request', 'sent');
+          return res.json({ success: true, message: 'Email sent successfully' });
+      } catch (error: any) {
+          console.error("Resend API error:", error);
           return res.status(500).json({ success: false, error: error.message });
       }
   });

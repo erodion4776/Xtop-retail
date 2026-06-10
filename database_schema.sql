@@ -23,7 +23,9 @@ CREATE TABLE subscribers (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   email TEXT NOT NULL,
   tenant_id UUID NOT NULL REFERENCES tenants(id),
-  status TEXT DEFAULT 'active'
+  status TEXT DEFAULT 'active',
+  name TEXT,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Email Templates table

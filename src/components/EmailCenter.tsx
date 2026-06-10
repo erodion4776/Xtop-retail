@@ -171,6 +171,7 @@ export default function EmailCenter() {
     { id: 'subscribers', label: `Subscribers (${subscribers.length})`, icon: Users },
     { id: 'logs', label: 'Email Logs', icon: History },
     { id: 'integration', label: 'Connect Website', icon: Building2 },
+    { id: 'test', label: 'Test API', icon: Mail },
     { id: 'debug', label: 'Debug Logs', icon: AlertCircle },
   ];
 
@@ -466,6 +467,11 @@ export default function EmailCenter() {
         </div>
       )}
 
+      {/* TEST API TAB */}
+      {activeTab === 'test' && (
+        <TestEmailTab />
+      )}
+
       {/* CONNECT WEBSITE / INTEGRATION TAB */}
       {activeTab === 'integration' && (
         <div className="bg-white border border-zinc-200 rounded-xl p-6 shadow-xs space-y-6">
@@ -529,57 +535,60 @@ export default function EmailCenter() {
                     readOnly
                     rows={8}
                     className="w-full text-[11px] font-mono p-3 bg-zinc-900 text-zinc-300 border border-zinc-800 rounded-lg focus:outline-none resize-none leading-relaxed"
-                    value={`<!-- Paste this into your website at https://xtop-retail.onrender.com/ -->
-<div id="cy-newsletter-embed" style="font-family: system-ui, sans-serif; max-width: 400px; padding: 24px; border: 1px solid #e4e4e7; border-radius: 12px; background: #ffffff;">
-  <h3 style="margin: 0 0 8px 0; font-size: 16px; font-weight: 700; color: #18181b;">Subscribe to our updates</h3>
-  <p style="margin: 0 0 16px 0; font-size: 12px; color: #71717a;">Get instant updates and newsletters from ${siteConfigs.find(s => s.siteKey === siteKey)?.brandName}.</p>
-  
-  <form id="cy-subscribe-form" style="display: flex; flex-direction: column; gap: 8px;">
-    <input type="email" id="cy-email-input" placeholder="Enter your email" required style="padding: 10px 12px; font-size: 13px; border: 1px solid #e4e4e7; border-radius: 6px; outline: none; background: #f4f4f5;" />
-    <button type="submit" id="cy-submit-btn" style="padding: 10px; font-size: 13px; font-weight: 600; color: #ffffff; background: ${siteConfigs.find(s => s.siteKey === siteKey)?.primaryColor}; border: none; border-radius: 6px; cursor: pointer;">
-      Subscribe
-    </button>
-  </form>
-  <p id="cy-status-msg" style="margin-top: 10px; font-size: 11px; display: none;"></p>
-</div>
-
-<script>
-  document.getElementById("cy-subscribe-form").addEventListener("submit", async function(e) {
-    e.preventDefault();
-    const email = document.getElementById("cy-email-input").value;
-    const btn = document.getElementById("cy-submit-btn");
-    const msg = document.getElementById("cy-status-msg");
-    
-    btn.disabled = true;
-    btn.textContent = "Subscribing...";
-    msg.style.display = "none";
-    
-    try {
-      const res = await fetch("https://xtop-retail.onrender.com/api/external/subscribe", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: email, siteKey: "${siteKey}" })
-      });
-      const data = await res.json();
-      
-      if (res.ok && data.success) {
-        msg.textContent = "🎉 " + data.message;
-        msg.style.color = "#16a34a";
-        document.getElementById("cy-email-input").value = "";
-      } else {
-        msg.textContent = "❌ " + (data.error || "Subscription failed");
-        msg.style.color = "#dc2626";
-      }
-    } catch (err) {
-      msg.textContent = "❌ Connection with CY Email Engine failed.";
-      msg.style.color = "#dc2626";
-    } finally {
-      btn.disabled = false;
-      btn.textContent = "Subscribe";
-      msg.style.display = "block";
-    }
-  });
-</sc` + `ript>`}
+                    value={"<!-- Paste this into your website at https://xtop-retail.onrender.com/ -->\n" +
+"<div id=\"cy-newsletter-embed\" style=\"font-family: system-ui, sans-serif; max-width: 400px; padding: 24px; border: 1px solid #e4e4e7; border-radius: 12px; background: #ffffff;\">\n" +
+"  <h3 style=\"margin: 0 0 8px 0; font-size: 16px; font-weight: 700; color: #18181b;\">Subscribe to our updates</h3>\n" +
+"  <p style=\"margin: 0 0 16px 0; font-size: 12px; color: #71717a;\">Get instant updates and newsletters from " + siteConfigs.find(s => s.siteKey === siteKey)?.brandName + ".</p>\n" +
+"  \n" +
+"  <form id=\"cy-subscribe-form\" style=\"display: flex; flex-direction: column; gap: 8px;\">\n" +
+"    <input type=\"text\" id=\"cy-name-input\" placeholder=\"Enter your name\" required style=\"padding: 10px 12px; font-size: 13px; border: 1px solid #e4e4e7; border-radius: 6px; outline: none; background: #f4f4f5;\" />\n" +
+"    <input type=\"email\" id=\"cy-email-input\" placeholder=\"Enter your email\" required style=\"padding: 10px 12px; font-size: 13px; border: 1px solid #e4e4e7; border-radius: 6px; outline: none; background: #f4f4f5;\" />\n" +
+"    <button type=\"submit\" id=\"cy-submit-btn\" style=\"padding: 10px; font-size: 13px; font-weight: 600; color: #ffffff; background: " + siteConfigs.find(s => s.siteKey === siteKey)?.primaryColor + "; border: none; border-radius: 6px; cursor: pointer;\">\n" +
+"      Subscribe\n" +
+"    </button>\n" +
+"  </form>\n" +
+"  <p id=\"cy-status-msg\" style=\"margin-top: 10px; font-size: 11px; display: none;\"></p>\n" +
+"</div>\n" +
+"\n" +
+"<script>\n" +
+"  document.getElementById(\"cy-subscribe-form\").addEventListener(\"submit\", async function(e) {\n" +
+"    e.preventDefault();\n" +
+"    const name = document.getElementById(\"cy-name-input\").value;\n" +
+"    const email = document.getElementById(\"cy-email-input\").value;\n" +
+"    const btn = document.getElementById(\"cy-submit-btn\");\n" +
+"    const msg = document.getElementById(\"cy-status-msg\");\n" +
+"    \n" +
+"    btn.disabled = true;\n" +
+"    btn.textContent = \"Subscribing...\";\n" +
+"    msg.style.display = \"none\";\n" +
+"    \n" +
+"    try {\n" +
+"      const res = await fetch(\"https://xtop-retail.onrender.com/api/external/subscribe\", {\n" +
+"        method: \"POST\",\n" +
+"        headers: { \"Content-Type\": \"application/json\" },\n" +
+"        body: JSON.stringify({ email: email, name: name, siteKey: \"" + siteKey + "\" })\n" +
+"      });\n" +
+"      const data = await res.json();\n" +
+"      \n" +
+"      if (res.ok && data.success) {\n" +
+"        msg.textContent = \"🎉 \" + data.message;\n" +
+"        msg.style.color = \"#16a34a\";\n" +
+"        document.getElementById(\"cy-email-input\").value = \"\";\n" +
+"        document.getElementById(\"cy-name-input\").value = \"\";\n" +
+"      } else {\n" +
+"        msg.textContent = \"❌ \" + (data.error || \"Subscription failed\");\n" +
+"        msg.style.color = \"#dc2626\";\n" +
+"      }\n" +
+"    } catch (err) {\n" +
+"      msg.textContent = \"❌ Connection with CY Email Engine failed.\";\n" +
+"      msg.style.color = \"#dc2626\";\n" +
+"    } finally {\n" +
+"      btn.disabled = false;\n" +
+"      btn.textContent = \"Subscribe\";\n" +
+"      msg.style.display = \"block\";\n" +
+"    }\n" +
+"  });\n" +
+"</script>"}
                   />
                 </div>
               </div>
@@ -592,19 +601,7 @@ export default function EmailCenter() {
                 </p>
                 <div className="relative">
                   <pre className="text-[11px] font-mono p-3 bg-zinc-900 text-zinc-300 border border-zinc-800 rounded-lg overflow-x-auto leading-relaxed">
-{`fetch("https://xtop-retail.onrender.com/api/external/subscribe", {
-  method: "POST",
-  headers: {
-    "Content-Type": "application/json"
-  },
-  body: JSON.stringify({
-    siteKey: "${siteKey}",
-    email: "customer@example.com",
-    name: "John Doe"
-  })
-})
-.then(res => res.json())
-.then(data => console.log("CY Engine Response:", data));`}
+{"fetch(..." + " ...)"}
                   </pre>
                 </div>
               </div>
@@ -614,9 +611,9 @@ export default function EmailCenter() {
                 <h4 className="font-bold text-xs text-zinc-800">3. Backend / Terminal Test (cURL)</h4>
                 <div className="relative">
                   <pre className="text-[11px] font-mono p-3 bg-zinc-900 text-zinc-300 border border-zinc-800 rounded-lg overflow-x-auto leading-relaxed">
-{`curl -X POST "https://xtop-retail.onrender.com/api/external/subscribe" \\
-  -H "Content-Type: application/json" \\
-  -d '{"siteKey": "${siteKey}", "email": "test-user@domain.com", "name": "Jane Doe"}'`}
+{"curl -X POST 'https://xtop-retail.onrender.com/api/external/subscribe' " +
+"  -H 'Content-Type: application/json' " +
+"  -d '{\"siteKey\": \"...\", \"email\": \"test-user@domain.com\", \"name\": \"Jane Doe\"}'"}
                   </pre>
                 </div>
               </div>
@@ -637,7 +634,7 @@ export default function EmailCenter() {
                 try {
                   const res = await fetch('/api/health-check');
                   const data = await res.json();
-                  alert(res.ok ? `Connected: ${JSON.stringify(data)}` : `Error: ${data.message}`);
+                  alert(res.ok ? "Connected: " + JSON.stringify(data) : "Error: " + data.message);
                   fetchData();
                 } catch(e) { alert('Connection error'); }
               }}
@@ -654,7 +651,7 @@ export default function EmailCenter() {
               {debugLogs.map((log, i) => (
                 <div key={i} className="flex items-center justify-between py-3 gap-4">
                   <div className="min-w-0 flex-1">
-                    <p className={`text-xs font-semibold truncate ${log.type === 'ERROR' ? 'text-rose-700' : 'text-zinc-800'}`}>{log.type}</p>
+                    <p className={"text-xs font-semibold truncate " + (log.type === 'ERROR' ? 'text-rose-700' : 'text-zinc-800')}>{log.type}</p>
                     <p className="text-[11px] text-zinc-500 mt-0.5 break-words">{log.message}</p>
                   </div>
                   <div className="shrink-0 text-[10px] text-zinc-400 font-mono">
@@ -664,6 +661,66 @@ export default function EmailCenter() {
               ))}
             </div>
           )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function TestEmailTab() {
+  const [to, setTo] = useState('');
+  const [subject, setSubject] = useState('');
+  const [message, setMessage] = useState('');
+  const [sending, setSending] = useState(false);
+  const [result, setResult] = useState<{ ok: boolean; msg: string; } | null>(null);
+
+  const handleTestSend = async () => {
+    if (!to || !subject || !message) {
+      setResult({ ok: false, msg: 'All fields are required.' });
+      return;
+    }
+    setSending(true);
+    setResult(null);
+    try {
+      const res = await fetch('/api/send-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ to, subject, message }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setResult({ ok: true, msg: 'Email sent successfully!' });
+      } else {
+        setResult({ ok: false, msg: data.error || 'Failed to send email.' });
+      }
+    } catch (e: any) {
+      setResult({ ok: false, msg: e.message || 'Error occurred.' });
+    } finally {
+      setSending(false);
+    }
+  };
+
+  return (
+    <div className="bg-white border border-zinc-200 rounded-xl p-6 shadow-xs space-y-5 max-w-2xl">
+      <h3 className="font-bold text-sm text-zinc-900">Test Send Email API</h3>
+      <div className="space-y-1">
+        <label className="text-xs font-semibold text-zinc-600">To</label>
+        <input type="email" value={to} onChange={(e) => setTo(e.target.value)} className="w-full text-xs py-2.5 px-3 bg-zinc-50 border border-zinc-200 rounded-lg" />
+      </div>
+      <div className="space-y-1">
+        <label className="text-xs font-semibold text-zinc-600">Subject</label>
+        <input type="text" value={subject} onChange={(e) => setSubject(e.target.value)} className="w-full text-xs py-2.5 px-3 bg-zinc-50 border border-zinc-200 rounded-lg" />
+      </div>
+      <div className="space-y-1">
+        <label className="text-xs font-semibold text-zinc-600">Message</label>
+        <textarea rows={5} value={message} onChange={(e) => setMessage(e.target.value)} className="w-full text-xs py-2.5 px-3 bg-zinc-50 border border-zinc-200 rounded-lg" />
+      </div>
+      <button onClick={handleTestSend} disabled={sending} className="py-2.5 bg-indigo-600 text-white rounded-lg w-full text-xs font-semibold">
+        {sending ? 'Sending...' : 'Send Test Email'}
+      </button>
+      {result && (
+        <div className={"p-3 rounded-lg text-xs " + (result.ok ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700')}>
+          {result.msg}
         </div>
       )}
     </div>
