@@ -174,6 +174,100 @@ export async function sendEmail({ siteKey, to, templateName, variables }: { site
 </html>`,
                     text_content: 'Welcome to the Academy Portal! Your digital access pass to the VAWA Protection Guide (Intro Edition) has been provisioned. Open your interactive reader here: https://ais-pre-m7qky7xz3xn5xqxlv426ei-24487513203.europe-west3.run.app/vawa-free-reader'
                 };
+            } else if (siteKey === 'cybarprep') {
+                template = {
+                    subject: 'Your Free California Bar Exam Study Kit is ready 📝',
+                    html_content: `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Your Free California Bar Exam Study Kit is ready 📝</title>
+  <style>
+    body { background-color: #FDFDFD; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; margin: 0; padding: 0; }
+  </style>
+</head>
+<body style="background-color: #FDFDFD; margin: 0; padding: 0;">
+  <table border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #FDFDFD; padding: 40px 10px;">
+    <tr>
+      <td align="center">
+        <table border="0" cellpadding="0" cellspacing="0" width="100%" style="max-width: 600px; background-color: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 20px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.03);">
+          <tr>
+            <td align="center" style="background-color: #B91C1C; padding: 30px;">
+              <span style="font-family: 'Georgia', serif; font-size: 24px; font-weight: bold; color: #FFFFFF; letter-spacing: 1px;">CY BAR PREP</span>
+              <div style="font-size: 10px; color: #FFD2D2; text-transform: uppercase; letter-spacing: 3px; margin-top: 5px; font-weight: bold;">PASS THE BAR WITH CONFIDENCE</div>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding: 45px 40px 30px 40px;">
+              <p style="font-size: 15px; color: #334155; line-height: 1.6;">Hello {{name}},</p>
+              <p style="font-size: 15px; color: #334155; line-height: 1.6;">Thank you for subscribing to <strong>CY Bar Prep</strong>. Our ultimate goal is to streamline your study timeline and build deep conceptual clarity so you can conquer the Bar Exam.</p>
+              <p style="font-size: 15px; color: #334155; line-height: 1.6;">We have prepared your secure legal study toolkit, and it is now ready for you to access.</p>
+              <div style="text-align: center; margin: 35px 0;">
+                <a href="https://cybarprep.com/free-resources" target="_blank" style="background-color: #B91C1C; color: #FFFFFF; text-decoration: none; padding: 14px 28px; font-size: 13px; font-weight: bold; border-radius: 8px; letter-spacing: 1px; display: inline-block; text-transform: uppercase;">Access Study Kit</a>
+              </div>
+            </td>
+          </tr>
+          <tr>
+            <td style="background-color: #F8FAFC; border-top: 1px solid #E2E8F0; padding: 30px 40px; text-align: center;">
+              <p style="font-size: 11px; color: #64748B; line-height: 1.5; margin: 0;">&copy; 2026 CY Bar Prep. All Rights Reserved. You are receiving this because you registered on our platform.<br/><a href="{{Unsubscribe_Link}}" target="_blank" style="color: #B91C1C; text-decoration: underline; margin-top: 8px; display: inline-block;">Unsubscribe</a></p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`,
+                    text_content: 'Thank you for subscribing to CY Bar Prep. Your legal study kit is ready for you to access: https://cybarprep.com/free-resources'
+                };
+            } else if (siteKey === 'cylawtech') {
+                template = {
+                    subject: 'Your Free LawTech Automation Checklist is inside ⚙️',
+                    html_content: `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Your Free LawTech Automation Checklist is inside ⚙️</title>
+  <style>
+    body { background-color: #FAFBFD; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; margin: 0; padding: 0; }
+  </style>
+</head>
+<body style="background-color: #FAFBFD; margin: 0; padding: 0;">
+  <table border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #FAFBFD; padding: 40px 10px;">
+    <tr>
+      <td align="center">
+        <table border="0" cellpadding="0" cellspacing="0" width="100%" style="max-width: 600px; background-color: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 20px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.03);">
+          <tr>
+            <td align="center" style="background-color: #1D4ED8; padding: 30px;">
+              <span style="font-family: 'Helvetica Neue', Arial, sans-serif; font-size: 24px; font-weight: bold; color: #FFFFFF; letter-spacing: 1px;">CY LAW TECH</span>
+              <div style="font-size: 10px; color: #D1E2FF; text-transform: uppercase; letter-spacing: 3px; margin-top: 5px; font-weight: bold;">AUTOMATING THE FUTURE OF LAW</div>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding: 45px 40px 30px 40px;">
+              <p style="font-size: 15px; color: #334155; line-height: 1.6;">Hello {{name}},</p>
+              <p style="font-size: 15px; color: #334155; line-height: 1.6;">Welcome to <strong>CY Law Tech</strong>! We are excited to have you on board with our network of modern legal engineers, software architects, and practitioners.</p>
+              <p style="font-size: 15px; color: #334155; line-height: 1.6;">As requested, we have prepared our premium Automation Checklist guiding code/document integration pipelines designed for high scalability.</p>
+              <div style="text-align: center; margin: 35px 0;">
+                <a href="https://cylawtech.com/checklist" target="_blank" style="background-color: #1D4ED8; color: #FFFFFF; text-decoration: none; padding: 14px 28px; font-size: 13px; font-weight: bold; border-radius: 8px; letter-spacing: 1px; display: inline-block; text-transform: uppercase;">Get Checklist Booklet</a>
+              </div>
+            </td>
+          </tr>
+          <tr>
+            <td style="background-color: #F8FAFC; border-top: 1px solid #E2E8F0; padding: 30px 40px; text-align: center;">
+              <p style="font-size: 11px; color: #64748B; line-height: 1.5; margin: 0;">&copy; 2026 CY Law Tech. All Rights Reserved. You are receiving this because you registered on our platform.<br/><a href="{{Unsubscribe_Link}}" target="_blank" style="color: #1D4ED8; text-decoration: underline; margin-top: 8px; display: inline-block;">Unsubscribe</a></p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`,
+                    text_content: 'Welcome to CY Law Tech! Your free Legal Automation Checklist booklet has been prepared: https://cylawtech.com/checklist'
+                };
             } else {
                 template = {
                     subject: 'Welcome to our newsletter! 🎉',
@@ -193,19 +287,31 @@ export async function sendEmail({ siteKey, to, templateName, variables }: { site
     // 3. Render Template
     const rendered = renderTemplate(template, siteKey, variables);
 
-    // 4. Determine Sender Address (Support verified domains with fallback support)
-    let senderName = config.senderName;
-    let senderEmail = 'noreply@cyvisahelp.com'; // Default verified sandbox domain
-    let replyTo = 'support@cylawtech.com';
+    // 4. Determine Sender Address (Support verified domains with fallback support utilizing one sending domain)
+    let baseDomain = 'cyvisahelp.com'; // Default verified sandbox domain
+    const defaultSender = process.env.SENDER_EMAIL || 'noreply@cyvisahelp.com';
+    if (defaultSender && defaultSender.includes('@')) {
+        baseDomain = defaultSender.split('@')[1];
+    }
 
-    if (siteKey === 'cylawtech') {
-        senderName = process.env.SENDER_NAME || 'CylawTech';
-        senderEmail = process.env.SENDER_EMAIL || 'hello@cylawtech.com';
-        replyTo = process.env.REPLY_TO_EMAIL || 'support@cylawtech.com';
-    } else {
-        senderName = process.env[`SENDER_NAME_${siteKey.toUpperCase()}`] || config.senderName;
-        senderEmail = process.env[`SENDER_EMAIL_${siteKey.toUpperCase()}`] || (siteKey === 'cyvisahelp' ? 'noreply@cyvisahelp.com' : `noreply@${siteKey}.com`);
-        replyTo = process.env[`REPLY_TO_EMAIL_${siteKey.toUpperCase()}`] || 'support@cylawtech.com';
+    let senderName = config.senderName;
+    // Each site gets its own customized prefix mapping directly (e.g. cyvisahelp@domain, cylawtech@domain, cybarprep@domain)
+    let senderEmail = `${siteKey}@${baseDomain}`;
+    let replyTo = `support@${siteKey}.com`;
+
+    // Allow fine-grained override via environment variables if desired
+    const customSenderEmail = process.env[`SENDER_EMAIL_${siteKey.toUpperCase()}`];
+    const customSenderName = process.env[`SENDER_NAME_${siteKey.toUpperCase()}`];
+    const customReplyTo = process.env[`REPLY_TO_EMAIL_${siteKey.toUpperCase()}`];
+
+    if (customSenderEmail) {
+        senderEmail = customSenderEmail;
+    }
+    if (customSenderName) {
+        senderName = customSenderName;
+    }
+    if (customReplyTo) {
+        replyTo = customReplyTo;
     }
 
     const fromAddress = `"${senderName}" <${senderEmail}>`;

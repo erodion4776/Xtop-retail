@@ -8,10 +8,10 @@ export const siteConfigs = [
     "primaryColor": "#0f172a"
   },
   {
-    "siteKey": "cybarcoach",
-    "brandName": "CY Bar Coach",
-    "senderName": "CY Bar Coach Support",
-    "website": "https://cybarcoach.com",
+    "siteKey": "cybarprep",
+    "brandName": "CY Bar Prep",
+    "senderName": "CY Bar Prep Support",
+    "website": "https://cybarprep.com",
     "logo": "https://images.unsplash.com/photo-1589829545856-d44a1edb928f?w=100&h=100&fit=crop",
     "primaryColor": "#b91c1c"
   },

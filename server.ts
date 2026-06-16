@@ -11,7 +11,7 @@ import dotenv from "dotenv";
 import cors from "cors";
 import rateLimit from "express-rate-limit";
 
-dotenv.config({ silent: true });
+dotenv.config();
 
 function logEnvironmentDiagnostic() {
     console.log("--- Environment Diagnostic ---");
@@ -182,16 +182,103 @@ async function startServer() {
 
   // Email Center APIs
   app.get("/api/subscribers", async (req: any, res: any) => {
-    const { data, error } = await supabaseAdmin.from('subscribers').select('*');
+    const { data, error } = await supabaseAdmin
+        .from('subscribers')
+        .select(`
+            id,
+            email,
+            name,
+            status,
+            created_at,
+            tenants (
+                id,
+                brand_name,
+                site_key
+            )
+        `)
+        .order('created_at', { ascending: false });
     if (error) return res.status(500).json({ error: error.message });
     res.json(data || []);
   });
 
   app.post("/api/subscribers", async (req: any, res: any) => {
-    const { email, name } = req.body;
-    const { data, error } = await supabaseAdmin.from('subscribers').insert({ email, name });
-    if (error) return res.status(500).json({ error: error.message });
-    res.json(data || []);
+    const { email, name, siteKey } = req.body;
+    const key = siteKey || "cyvisahelp";
+
+    if (!email || !email.includes('@')) {
+        return res.status(400).json({ error: "Valid email address is required." });
+    }
+
+    try {
+        // 1. Resolve tenant
+        let { data: tenant } = await supabaseAdmin.from('tenants').select('id, brand_name').eq('site_key', key).single();
+        
+        if (!tenant) {
+            // Self-seed tenant if mismatch occurs
+            const config = siteConfigs.find(s => s.siteKey === key);
+            if (config) {
+                const { data: newTenant, error: insertErr } = await supabaseAdmin.from('tenants').insert({
+                    site_key: config.siteKey,
+                    brand_name: config.brandName,
+                    sender_name: config.senderName,
+                    primary_color: config.primaryColor,
+                    logo_url: config.logo
+                }).select().single();
+                
+                if (!insertErr && newTenant) {
+                    tenant = { id: newTenant.id, brand_name: newTenant.brand_name };
+                }
+            }
+        }
+
+        if (!tenant) {
+            return res.status(404).json({ error: `Tenant brand for "${key}" not configured.` });
+        }
+
+        // 2. Look for pre-existing subscriber
+        const { data: existing } = await supabaseAdmin
+            .from('subscribers')
+            .select('id')
+            .eq('email', email)
+            .eq('tenant_id', tenant.id)
+            .maybeSingle();
+
+        if (existing) {
+            return res.status(400).json({ error: `Already subscribed to ${tenant.brand_name}.` });
+        }
+
+        // 3. Insert and subscribe
+        const { data: subscriber, error: subErr } = await supabaseAdmin
+            .from('subscribers')
+            .insert({
+                email,
+                name: name || 'Subscriber',
+                tenant_id: tenant.id,
+                status: 'active'
+            })
+            .select('*')
+            .single();
+
+        if (subErr) throw subErr;
+
+        // 4. Fire the instant site welcome email
+        try {
+            await sendEmail({ 
+                siteKey: key, 
+                to: email, 
+                templateName: 'welcome', 
+                variables: { name: name || 'there', email, website_name: tenant.brand_name } 
+            });
+        } catch (mailErr: any) {
+            addDebugLog('ERROR', `Failed to send site welcome email to ${email}: ${mailErr.message}`);
+            console.error("Welcome email failed:", mailErr.message);
+        }
+
+        res.json(subscriber);
+    } catch (err: any) {
+        addDebugLog('ERROR', `Failed standard subscribe: ${err.message}`);
+        res.status(500).json({ error: err.message });
+    }
   });
 
   // POST /api/send-campaign
@@ -199,19 +286,34 @@ async function startServer() {
       const { siteKey, subject, message, sendTo, emails } = req.body;
       
       try {
+          // Fetch corresponding tenant to restrict campaign to subscribers of selected site
+          const { data: tenant } = await supabaseAdmin
+              .from('tenants')
+              .select('id')
+              .eq('site_key', siteKey)
+              .single();
+
+          if (!tenant) {
+              return res.status(400).json({ error: `Invalid siteKey: tenant not found.` });
+          }
+
           let targets: string[] = [];
           
           if (sendTo === 'all') {
-              const { data } = await supabaseAdmin.from('subscribers').select('email');
+              const { data } = await supabaseAdmin
+                  .from('subscribers')
+                  .select('email')
+                  .eq('tenant_id', tenant.id)
+                  .eq('status', 'active');
               targets = data?.map((s: any) => s.email) || [];
           } else if (sendTo === 'single' && emails?.length) {
               targets = emails;
           }
 
-          if (targets.length === 0) return res.status(400).json({ error: 'No recipients found' });                
+          if (targets.length === 0) return res.status(400).json({ error: `No active subscribers found for ${siteKey}` });                
 
           for (const to of targets) {
-              await sendEmail({ siteKey, to, templateName: 'campaign', variables: {name: 'User', email: to, message: message } });
+              await sendEmail({ siteKey, to, templateName: 'campaign', variables: { name: 'User', email: to, message: message } });
           }
           res.json({ success: true, sent: targets.length });
 

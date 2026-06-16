@@ -1,6 +1,6 @@
 import { Resend } from "resend";
 import dotenv from "dotenv";
-dotenv.config({ silent: true });
+dotenv.config();
 
 let resendClient: Resend | null = null;
 

@@ -5,6 +5,10 @@ import { siteConfigs } from '../../server/emailConfig';
 interface Subscriber {
   id: string;
   email: string;
+  tenants?: {
+    brand_name: string;
+    site_key: string;
+  };
 }
 
 interface EmailLog {
@@ -69,6 +73,7 @@ export default function EmailCenter() {
 
   // Add subscriber state
   const [newEmail, setNewEmail] = useState('');
+  const [addSiteKey, setAddSiteKey] = useState(siteConfigs[0].siteKey);
   const [addingSubscriber, setAddingSubscriber] = useState(false);
 
   const fetchData = async () => {
@@ -155,7 +160,7 @@ export default function EmailCenter() {
       const res = await fetch('/api/subscribers', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: newEmail.trim() }),
+        body: JSON.stringify({ email: newEmail.trim(), siteKey: addSiteKey }),
       });
       if (res.ok) {
         setNewEmail('');
@@ -401,41 +406,78 @@ export default function EmailCenter() {
           <h3 className="font-bold text-sm text-zinc-900">Subscribers</h3>
 
           {/* Add subscriber */}
-          <div className="flex gap-2">
-            <input
-              type="email"
-              placeholder="Add subscriber email..."
-              value={newEmail}
-              onChange={(e) => setNewEmail(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleAddSubscriber()}
-              className="flex-1 text-xs py-2.5 px-3 bg-zinc-50 border border-zinc-200 rounded-lg text-zinc-800 placeholder-zinc-400 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
-            />
-            <button
-              onClick={handleAddSubscriber}
-              disabled={addingSubscriber}
-              className="px-3 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold rounded-lg flex items-center gap-1.5 cursor-pointer"
-            >
-              {addingSubscriber ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
-              Add
-            </button>
+          <div className="flex flex-col sm:flex-row gap-2 bg-zinc-50/50 p-4 rounded-xl border border-zinc-100">
+            <div className="flex-1 space-y-1">
+              <label className="text-[10px] uppercase font-bold tracking-wider text-zinc-400">Email Address</label>
+              <input
+                type="email"
+                placeholder="Add subscriber email..."
+                value={newEmail}
+                onChange={(e) => setNewEmail(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleAddSubscriber()}
+                className="w-full text-xs py-2 px-3 bg-white border border-zinc-200 rounded-lg text-zinc-800 placeholder-zinc-400 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
+              />
+            </div>
+            <div className="w-full sm:w-48 space-y-1">
+              <label className="text-[10px] uppercase font-bold tracking-wider text-zinc-400">Choose Website</label>
+              <select
+                value={addSiteKey}
+                onChange={(e) => setAddSiteKey(e.target.value)}
+                className="w-full text-xs py-2 px-2 bg-white border border-zinc-200 rounded-lg text-zinc-800 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
+              >
+                {siteConfigs.map(s => (
+                  <option key={s.siteKey} value={s.siteKey}>{s.brandName}</option>
+                ))}
+              </select>
+            </div>
+            <div className="flex items-end">
+              <button
+                onClick={handleAddSubscriber}
+                disabled={addingSubscriber}
+                className="w-full sm:w-auto px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold rounded-lg flex items-center justify-center gap-1.5 cursor-pointer h-[34px]"
+              >
+                {addingSubscriber ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
+                Add
+              </button>
+            </div>
           </div>
 
           {/* List */}
-          <div className="divide-y divide-zinc-100">
+          <div className="divide-y divide-zinc-100 max-h-[400px] overflow-y-auto pr-1">
             {subscribers.length === 0 ? (
               <p className="text-xs text-zinc-400 py-6 text-center">No subscribers yet.</p>
             ) : (
-              subscribers.map((s) => (
-                <div key={s.id} className="flex items-center justify-between py-2.5 text-xs">
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-6 h-6 rounded-full bg-indigo-50 text-indigo-700 flex items-center justify-center font-bold text-[10px]">
-                      {s.email.charAt(0).toUpperCase()}
+              subscribers.map((s) => {
+                const siteKey = s.tenants?.site_key || 'cyvisahelp';
+                const brandName = s.tenants?.brand_name || 'CY Visa Help';
+                
+                // Customize badge color matching the site branding
+                let badgeColor = 'bg-slate-50 text-slate-700 border-slate-100';
+                if (siteKey === 'cylawtech') {
+                  badgeColor = 'bg-blue-50 text-blue-700 border-blue-200';
+                } else if (siteKey === 'cybarprep') {
+                  badgeColor = 'bg-rose-50 text-rose-700 border-rose-250';
+                }
+
+                return (
+                  <div key={s.id} className="flex items-center justify-between py-3 text-xs">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-6 h-6 rounded-full bg-zinc-100 text-zinc-700 flex items-center justify-center font-bold text-[10px]">
+                        {s.email.charAt(0).toUpperCase()}
+                      </div>
+                      <div className="flex flex-col">
+                        <span className="font-medium text-zinc-800">{s.email}</span>
+                      </div>
                     </div>
-                    <span className="font-medium text-zinc-800">{s.email}</span>
+                    <div className="flex items-center gap-2">
+                      <span className={`text-[10px] font-semibold border px-2 py-0.5 rounded ${badgeColor}`}>
+                        {brandName}
+                      </span>
+                      <span className="text-[10px] text-emerald-600 font-semibold bg-emerald-50 px-2 py-0.5 rounded">Active</span>
+                    </div>
                   </div>
-                  <span className="text-[10px] text-emerald-600 font-semibold bg-emerald-50 px-2 py-0.5 rounded">Active</span>
-                </div>
-              ))
+                );
+              })
             )}
           </div>
         </div>
