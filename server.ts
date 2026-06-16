@@ -339,6 +339,209 @@ async function startServer() {
       }
   });
 
+  // GET /api/welcome-template/:siteKey
+  app.get("/api/welcome-template/:siteKey", async (req: any, res: any) => {
+      const { siteKey } = req.params;
+      try {
+          const { data: tenant } = await supabaseAdmin.from('tenants').select('id, brand_name').eq('site_key', siteKey).single();
+          
+          let existingTemplate = null;
+          if (tenant) {
+              const { data: dataTemplate } = await supabaseAdmin
+                  .from('email_templates')
+                  .select('*')
+                  .eq('tenant_id', tenant.id)
+                  .eq('name', 'welcome')
+                  .maybeSingle();
+              existingTemplate = dataTemplate;
+          }
+
+          if (existingTemplate) {
+              return res.json({
+                  subject: existingTemplate.subject,
+                  body: existingTemplate.html_content,
+                  enabled: true
+              });
+          }
+
+          // Generate site-specific high-contrast beautiful fallbacks matching emailService.ts
+          let defaultSubject = 'Welcome! 🎉';
+          let defaultBody = '<h1>Welcome!</h1><p>Thank you for subscribing to our updates.</p>';
+
+          if (siteKey === 'cyvisahelp') {
+              defaultSubject = 'Your Free VAWA Strategy Guide is Inside 🔐';
+              defaultBody = `<!DOCTYPE html>
+<html lang="en">
+<body style="margin: 0; padding: 0; background-color: #F8F9FA; font-family: 'Georgia', serif;">
+  <table width="100%" bgcolor="#F8F9FA" style="padding: 40px 10px;">
+    <tr>
+      <td align="center">
+        <table width="600" bgcolor="#FFFFFF" style="border: 1px solid #E2E8F0; border-radius: 20px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.03);">
+          <tr>
+            <td align="center" bgcolor="#0F172A" style="padding: 40px;">
+              <span style="font-size: 26px; font-weight: bold; color: #FFFFFF; letter-spacing: 1px;">CY VISA HELP</span>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding: 40px; color: #334155; line-height: 1.6;">
+              <h2 style="color: #0F172A; text-align: center;">Welcome to the Academy Portal</h2>
+              <p>Hello {email},</p>
+              <p>Thank you for connecting with the <strong>CY Visa Help Digital Academy</strong>. We simplify complex immigration procedures into clear, manageable steps.</p>
+              <p>As requested, your digital access pass to the complimentary entry edition of the <strong>VAWA Protection Guide</strong> has been provisioned.</p>
+              <div style="text-align: center; margin: 30px 0;">
+                <a href="https://cyvisahelp.com/vawa-free-reader" target="_blank" style="background-color: #C5A059; color: #FFFFFF; text-decoration: none; padding: 14px 28px; font-weight: bold; border-radius: 50px; display: inline-block;">Open Interactive Reader</a>
+              </div>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+          } else if (siteKey === 'cybarprep') {
+              defaultSubject = 'Your Free California Bar Exam Study Kit is ready 📝';
+              defaultBody = `<!DOCTYPE html>
+<html lang="en">
+<body style="margin: 0; padding: 0; background-color: #FDFDFD; font-family: 'Helvetica Neue', sans-serif;">
+  <table width="100%" bgcolor="#FDFDFD" style="padding: 40px 10px;">
+    <tr>
+      <td align="center">
+        <table width="600" bgcolor="#FFFFFF" style="border: 1px solid #E2E8F0; border-radius: 20px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.03);">
+          <tr>
+            <td align="center" bgcolor="#B91C1C" style="padding: 30px;">
+              <span style="font-size: 24px; font-weight: bold; color: #FFFFFF; letter-spacing: 1px;">CY BAR PREP</span>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding: 40px; color: #334155; line-height: 1.6;">
+              <p>Hello {email},</p>
+              <p>Thank you for subscribing to <strong>CY Bar Prep</strong>. Our ultimate goal is to build deep conceptual clarity so you can conquer the Bar Exam with confidence.</p>
+              <p>We have prepared your secure legal study toolkit. Access it immediately below:</p>
+              <div style="text-align: center; margin: 30px 0;">
+                <a href="https://cybarprep.com/free-resources" target="_blank" style="background-color: #B91C1C; color: #FFFFFF; text-decoration: none; padding: 14px 28px; font-weight: bold; border-radius: 8px; display: inline-block;">Access Study Kit</a>
+              </div>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+          } else if (siteKey === 'cylawtech') {
+              defaultSubject = 'Your Free LawTech Automation Checklist is inside ⚙️';
+              defaultBody = `<!DOCTYPE html>
+<html lang="en">
+<body style="margin: 0; padding: 0; background-color: #FAFBFD; font-family: 'Helvetica Neue', sans-serif;">
+  <table width="100%" bgcolor="#FAFBFD" style="padding: 40px 10px;">
+    <tr>
+      <td align="center">
+        <table width="600" bgcolor="#FFFFFF" style="border: 1px solid #E2E8F0; border-radius: 20px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.03);">
+          <tr>
+            <td align="center" bgcolor="#1D4ED8" style="padding: 30px;">
+              <span style="font-size: 24px; font-weight: bold; color: #FFFFFF; letter-spacing: 1px;">CY LAW TECH</span>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding: 40px; color: #334155; line-height: 1.6;">
+              <p>Hello {email},</p>
+              <p>Welcome to <strong>CY Law Tech</strong>! We are excited to have you join our network of legal engineers, automation architects, and advanced tech practitioners.</p>
+              <p>We have prepared our premium Automation Checklist guiding code and document integration pipelines.</p>
+              <div style="text-align: center; margin: 30px 0;">
+                <a href="https://cylawtech.com/checklist" target="_blank" style="background-color: #1D4ED8; color: #FFFFFF; text-decoration: none; padding: 14px 28px; font-weight: bold; border-radius: 8px; display: inline-block;">Get Automation Checklist</a>
+              </div>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+          }
+
+          res.json({
+              subject: defaultSubject,
+              body: defaultBody,
+              enabled: true
+          });
+      } catch (err: any) {
+          res.status(500).json({ error: err.message });
+      }
+  });
+
+  // POST /api/welcome-template/:siteKey
+  app.post("/api/welcome-template/:siteKey", async (req: any, res: any) => {
+      const { siteKey } = req.params;
+      const { subject, body } = req.body;
+      
+      if (!subject || !body) {
+          return res.status(400).json({ error: "Subject and body are elements required to configure a template." });
+      }
+
+      try {
+          let { data: tenant } = await supabaseAdmin.from('tenants').select('id, brand_name').eq('site_key', siteKey).single();
+          
+          if (!tenant) {
+              // Self-seed tenant if mismatch occurs
+              const config = siteConfigs.find(s => s.siteKey === siteKey);
+              if (config) {
+                  const { data: newTenant, error: insertErr } = await supabaseAdmin.from('tenants').insert({
+                      site_key: config.siteKey,
+                      brand_name: config.brandName,
+                      sender_name: config.senderName,
+                      primary_color: config.primaryColor,
+                      logo_url: config.logo
+                  }).select().single();
+                  
+                  if (!insertErr && newTenant) {
+                      tenant = { id: newTenant.id, brand_name: newTenant.brand_name };
+                  }
+              }
+          }
+
+          if (!tenant) {
+              return res.status(444).json({ error: `Tenant brand for "${siteKey}" is unconfigured.` });
+          }
+
+          const { data: existingTemplate } = await supabaseAdmin
+              .from('email_templates')
+              .select('id')
+              .eq('tenant_id', tenant.id)
+              .eq('name', 'welcome')
+              .maybeSingle();
+
+          if (existingTemplate) {
+              const { error: updateErr } = await supabaseAdmin
+                  .from('email_templates')
+                  .update({
+                      subject,
+                      html_content: body,
+                      text_content: body.replace(/<[^>]*>/g, '') 
+                  })
+                  .eq('id', existingTemplate.id);
+                  
+              if (updateErr) throw updateErr;
+          } else {
+              const { error: insertErr } = await supabaseAdmin
+                  .from('email_templates')
+                  .insert({
+                      tenant_id: tenant.id,
+                      name: 'welcome',
+                      subject,
+                      html_content: body,
+                      text_content: body.replace(/<[^>]*>/g, '')
+                  });
+              if (insertErr) throw insertErr;
+          }
+
+          res.json({ success: true, message: `Successfully updated welcome template for ${tenant.brand_name}` });
+      } catch (err: any) {
+          res.status(500).json({ error: err.message });
+      }
+  });
+
   // POST /api/external/subscribe - Public CORS-enabled endpoint for external integration (e.g. https://xtop-retail.onrender.com/)
   app.post("/api/external/subscribe", async (req: any, res: any) => {
       const { siteKey, email, name } = req.body;

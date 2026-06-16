@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
-import { Mail, Users, History, Send, Loader2, Plus, AlertCircle, CheckCircle2, ToggleLeft, ToggleRight, Building2, Activity, Check, TrendingUp, XCircle, AlertTriangle } from 'lucide-react';
+import { Mail, Users, History, Send, Loader2, Plus, AlertCircle, CheckCircle2, ToggleLeft, ToggleRight, Building2, Activity, Check, Search, Filter, RotateCcw, ShieldCheck, HelpCircle } from 'lucide-react';
 import { siteConfigs } from '../../server/emailConfig';
 
 interface Subscriber {
   id: string;
   email: string;
+  name?: string;
   tenants?: {
     brand_name: string;
     site_key: string;
@@ -26,20 +27,101 @@ interface WelcomeTemplate {
   enabled: boolean;
 }
 
-const DEFAULT_WELCOME: WelcomeTemplate = {
-  subject: 'Welcome to our newsletter! 🎉',
-  body: `<h1>Welcome aboard!</h1>
-<p>Hi there,</p>
-<p>Thank you for subscribing. We're thrilled to have you with us.</p>
-<p>Here's what you can expect from us:</p>
-<ul>
-  <li>Weekly updates and news</li>
-  <li>Exclusive offers and promotions</li>
-  <li>Helpful tips and resources</li>
-</ul>
-<p>Stay tuned for our next email!</p>
-<p>Best regards,<br/>The Team</p>`,
-  enabled: true,
+const SITE_DEFAULTS: Record<string, { subject: string; body: string }> = {
+  cyvisahelp: {
+    subject: 'Your Free VAWA Strategy Guide is Inside 🔐',
+    body: `<!DOCTYPE html>
+<html lang="en">
+<body style="margin: 0; padding: 0; background-color: #F8F9FA; font-family: 'Georgia', serif;">
+  <table width="100%" bgcolor="#F8F9FA" style="padding: 40px 10px;">
+    <tr>
+      <td align="center">
+        <table width="600" bgcolor="#FFFFFF" style="border: 1px solid #E2E8F0; border-radius: 20px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.03);">
+          <tr>
+            <td align="center" bgcolor="#0F172A" style="padding: 40px;">
+              <span style="font-size: 26px; font-weight: bold; color: #FFFFFF; letter-spacing: 1px;">CY VISA HELP</span>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding: 40px; color: #334155; line-height: 1.6;">
+              <h3 style="color: #0F172A; text-align: center;">Welcome to the Academy Portal</h3>
+              <p>Hello there,</p>
+              <p>Thank you for connecting with the <strong>CY Visa Help Digital Academy</strong>. We simplify complex immigration procedures into clear, manageable steps.</p>
+              <p>As requested, your digital access pass to the complimentary entry edition of the <strong>VAWA Protection Guide</strong> has been provisioned.</p>
+              <div style="text-align: center; margin: 30px 0;">
+                <a href="https://cyvisahelp.com/vawa-free-reader" target="_blank" style="background-color: #C5A059; color: #FFFFFF; text-decoration: none; padding: 14px 28px; font-weight: bold; border-radius: 50px; display: inline-block;">Open Interactive Reader</a>
+              </div>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`
+  },
+  cybarprep: {
+    subject: 'Your Free California Bar Exam Study Kit is ready 📝',
+    body: `<!DOCTYPE html>
+<html lang="en">
+<body style="margin: 0; padding: 0; background-color: #FDFDFD; font-family: 'Helvetica Neue', sans-serif;">
+  <table width="100%" bgcolor="#FDFDFD" style="padding: 40px 10px;">
+    <tr>
+      <td align="center">
+        <table width="600" bgcolor="#FFFFFF" style="border: 1px solid #E2E8F0; border-radius: 20px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.03);">
+          <tr>
+            <td align="center" bgcolor="#B91C1C" style="padding: 30px;">
+              <span style="font-size: 24px; font-weight: bold; color: #FFFFFF; letter-spacing: 1px;">CY BAR PREP</span>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding: 40px; color: #334155; line-height: 1.6;">
+              <p>Hello there,</p>
+              <p>Thank you for subscribing to <strong>CY Bar Prep</strong>. Our ultimate goal is to build deep conceptual clarity so you can conquer the Bar Exam with confidence.</p>
+              <p>We have prepared your secure legal study toolkit. Access it immediately below:</p>
+              <div style="text-align: center; margin: 30px 0;">
+                <a href="https://cybarprep.com/free-resources" target="_blank" style="background-color: #B91C1C; color: #FFFFFF; text-decoration: none; padding: 14px 28px; font-weight: bold; border-radius: 8px; display: inline-block;">Access Study Kit</a>
+              </div>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`
+  },
+  cylawtech: {
+    subject: 'Your Free LawTech Automation Checklist is inside ⚙️',
+    body: `<!DOCTYPE html>
+<html lang="en">
+<body style="margin: 0; padding: 0; background-color: #FAFBFD; font-family: 'Helvetica Neue', sans-serif;">
+  <table width="100%" bgcolor="#FAFBFD" style="padding: 40px 10px;">
+    <tr>
+      <td align="center">
+        <table width="600" bgcolor="#FFFFFF" style="border: 1px solid #E2E8F0; border-radius: 20px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.03);">
+          <tr>
+            <td align="center" bgcolor="#1D4ED8" style="padding: 30px;">
+              <span style="font-size: 24px; font-weight: bold; color: #FFFFFF; letter-spacing: 1px;">CY LAW TECH</span>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding: 40px; color: #334155; line-height: 1.6;">
+              <p>Hello there,</p>
+              <p>Welcome to <strong>CY Law Tech</strong>! We are excited to have you join our network of legal engineers, automation architects, and advanced tech practitioners.</p>
+              <p>We have prepared our premium Automation Checklist guiding code and document integration pipelines.</p>
+              <div style="text-align: center; margin: 30px 0;">
+                <a href="https://cylawtech.com/checklist" target="_blank" style="background-color: #1D4ED8; color: #FFFFFF; text-decoration: none; padding: 14px 28px; font-weight: bold; border-radius: 8px; display: inline-block;">Get Automation Checklist</a>
+              </div>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`
+  }
 };
 
 type ActiveTab = 'health' | 'send' | 'welcome' | 'subscribers' | 'logs' | 'integration' | 'test' | 'debug';
@@ -59,20 +141,27 @@ export default function EmailCenter() {
   const [sending, setSending] = useState(false);
   const [sendResult, setSendResult] = useState<{ ok: boolean; msg: string } | null>(null);
 
-  // Welcome template state
-  const [welcome, setWelcome] = useState<WelcomeTemplate>(() => {
-    try {
-      const saved = localStorage.getItem('xtopflow_welcome_template');
-      return saved ? JSON.parse(saved) : DEFAULT_WELCOME;
-    } catch {
-      return DEFAULT_WELCOME;
-    }
+  // Welcome templates state
+  const [welcomeSiteKey, setWelcomeSiteKey] = useState(siteConfigs[0].siteKey);
+  const [welcome, setWelcome] = useState<WelcomeTemplate>({
+    subject: SITE_DEFAULTS.cyvisahelp.subject,
+    body: SITE_DEFAULTS.cyvisahelp.body,
+    enabled: true
   });
   const [savingWelcome, setSavingWelcome] = useState(false);
   const [welcomeSaved, setWelcomeSaved] = useState(false);
+  const [loadingWelcome, setLoadingWelcome] = useState(false);
+
+  // Filters
+  const [subFilterSite, setSubFilterSite] = useState<string>('all');
+  const [subSearchQuery, setSubSearchQuery] = useState('');
+  
+  const [logSearchQuery, setLogSearchQuery] = useState('');
+  const [logFilterStatus, setLogFilterStatus] = useState<string>('all');
 
   // Add subscriber state
   const [newEmail, setNewEmail] = useState('');
+  const [newName, setNewName] = useState('');
   const [addSiteKey, setAddSiteKey] = useState(siteConfigs[0].siteKey);
   const [addingSubscriber, setAddingSubscriber] = useState(false);
 
@@ -91,19 +180,58 @@ export default function EmailCenter() {
     }
   };
 
+  const fetchWelcomeTemplate = async (key: string) => {
+    setLoadingWelcome(true);
+    try {
+      const res = await fetch(`/api/welcome-template/${key}`);
+      if (res.ok) {
+        const data = await res.json();
+        setWelcome({
+          subject: data.subject || '',
+          body: data.body || '',
+          enabled: data.enabled ?? true
+        });
+      } else {
+        // Fallback to defaults
+        const defaults = SITE_DEFAULTS[key] || SITE_DEFAULTS.cyvisahelp;
+        setWelcome({
+          subject: defaults.subject,
+          body: defaults.body,
+          enabled: true
+        });
+      }
+    } catch (e) {
+      console.error('Error fetching welcome template', e);
+      const defaults = SITE_DEFAULTS[key] || SITE_DEFAULTS.cyvisahelp;
+      setWelcome({
+        subject: defaults.subject,
+        body: defaults.body,
+        enabled: true
+      });
+    } finally {
+      setLoadingWelcome(false);
+    }
+  };
+
   useEffect(() => {
     fetchData();
     const interval = setInterval(fetchData, 15000);
     return () => clearInterval(interval);
   }, []);
 
+  useEffect(() => {
+    if (activeTab === 'welcome') {
+      fetchWelcomeTemplate(welcomeSiteKey);
+    }
+  }, [activeTab, welcomeSiteKey]);
+
   const handleSendCampaign = async () => {
     if (!subject.trim() || !message.trim()) {
-      setSendResult({ ok: false, msg: 'Subject and message are required.' });
+      setSendResult({ ok: false, msg: 'Subject and message body are required.' });
       return;
     }
     if (sendTo === 'single' && !singleEmail.trim()) {
-      setSendResult({ ok: false, msg: 'Please enter a recipient email.' });
+      setSendResult({ ok: false, msg: 'Please enter a valid single recipient email.' });
       return;
     }
     setSending(true);
@@ -122,16 +250,16 @@ export default function EmailCenter() {
       });
       const data = await res.json();
       if (res.ok) {
-        setSendResult({ ok: true, msg: `Campaign sent successfully!` });
+        setSendResult({ ok: true, msg: `Campaign sent successfully to targeted users!` });
         setSubject('');
         setMessage('');
         setSingleEmail('');
         fetchData();
       } else {
-        setSendResult({ ok: false, msg: data.error || 'Failed to send campaign.' });
+        setSendResult({ ok: false, msg: data.error || 'Failed to dispatch email campaign.' });
       }
     } catch (e: any) {
-      setSendResult({ ok: false, msg: e.message || 'Network error.' });
+      setSendResult({ ok: false, msg: e.message || 'Network communication error.' });
     } finally {
       setSending(false);
     }
@@ -139,73 +267,143 @@ export default function EmailCenter() {
 
   const handleSaveWelcome = async () => {
     setSavingWelcome(true);
-    localStorage.setItem('xtopflow_welcome_template', JSON.stringify(welcome));
-    // Also save to server so new subscribers get correct welcome email
     try {
-      await fetch('/api/welcome-template', {
+      const res = await fetch(`/api/welcome-template/${welcomeSiteKey}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(welcome),
       });
-    } catch {}
-    setSavingWelcome(false);
-    setWelcomeSaved(true);
-    setTimeout(() => setWelcomeSaved(false), 3000);
+      if (res.ok) {
+        setWelcomeSaved(true);
+        setTimeout(() => setWelcomeSaved(false), 3000);
+      } else {
+        const errData = await res.json();
+        alert("Failed to save welcome template: " + (errData.error || "Unknown server error"));
+      }
+    } catch (e: any) {
+      console.error(e);
+      alert("Network error: " + e.message);
+    } finally {
+      setSavingWelcome(false);
+    }
   };
 
   const handleAddSubscriber = async () => {
-    if (!newEmail.trim() || !newEmail.includes('@')) return;
+    if (!newEmail.trim() || !newEmail.includes('@')) {
+      alert("Please enter a valid email address.");
+      return;
+    }
     setAddingSubscriber(true);
     try {
       const res = await fetch('/api/subscribers', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: newEmail.trim(), siteKey: addSiteKey }),
+        body: JSON.stringify({ email: newEmail.trim(), name: newName.trim(), siteKey: addSiteKey }),
       });
       if (res.ok) {
         setNewEmail('');
+        setNewName('');
         fetchData();
+      } else {
+        const data = await res.json();
+        alert(data.error || "Could not register subscriber.");
       }
-    } catch {}
-    setAddingSubscriber(false);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setAddingSubscriber(false);
+    }
   };
 
+  const handleResetWelcomeToDefault = () => {
+    const defaults = SITE_DEFAULTS[welcomeSiteKey];
+    if (defaults && confirm(`Are you sure you want to reset the welcome email for "${siteConfigs.find(s=>s.siteKey===welcomeSiteKey)?.brandName}" back to the site general defaults?`)) {
+      setWelcome({
+        subject: defaults.subject,
+        body: defaults.body,
+        enabled: true
+      });
+    }
+  };
+
+  // Filter lists
+  const filteredSubscribers = subscribers.filter(s => {
+    const sKey = s.tenants?.site_key || 'cyvisahelp';
+    const matchesSite = subFilterSite === 'all' || sKey === subFilterSite;
+    const matchesSearch = subSearchQuery.trim() === '' || 
+      s.email.toLowerCase().includes(subSearchQuery.toLowerCase()) ||
+      (s.name && s.name.toLowerCase().includes(subSearchQuery.toLowerCase()));
+    return matchesSite && matchesSearch;
+  });
+
+  const filteredLogs = logs.filter(l => {
+    const matchesSearch = logSearchQuery.trim() === '' ||
+      l.to.toLowerCase().includes(logSearchQuery.toLowerCase()) ||
+      l.subject.toLowerCase().includes(logSearchQuery.toLowerCase());
+    const matchesStatus = logFilterStatus === 'all' || l.status === logFilterStatus;
+    return matchesSearch && matchesStatus;
+  });
+
   const tabs: { id: ActiveTab; label: string; icon: any }[] = [
-    { id: 'health', label: 'Email Health', icon: Activity },
-    { id: 'send', label: 'Send Campaign', icon: Send },
-    { id: 'welcome', label: 'Welcome Email', icon: Mail },
-    { id: 'subscribers', label: `Subscribers (${subscribers.length})`, icon: Users },
-    { id: 'logs', label: 'Email Logs', icon: History },
-    { id: 'integration', label: 'Connect Website', icon: Building2 },
-    { id: 'test', label: 'Test API', icon: Mail },
-    { id: 'debug', label: 'Debug Logs', icon: AlertCircle },
+    { id: 'health', label: 'Email Health & Status', icon: Activity },
+    { id: 'send', label: 'Send Newsletters', icon: Send },
+    { id: 'welcome', label: 'Welcome Mail Automation', icon: Mail },
+    { id: 'subscribers', label: `Lead Manager (${subscribers.length})`, icon: Users },
+    { id: 'logs', label: 'Delivery logs', icon: History },
+    { id: 'integration', label: 'Embedded Form Widget', icon: Building2 },
+    { id: 'test', label: 'Direct Send API', icon: ShieldCheck },
+    { id: 'debug', label: 'Internal Logs', icon: AlertCircle },
   ];
 
   return (
-    <div className="space-y-6 animate-fade-in">
-      {/* Header */}
-      <div>
-        <h2 className="text-xl font-bold text-zinc-900 tracking-tight">Email Center</h2>
-        <p className="text-xs text-zinc-500 mt-1">
-          Send campaigns, manage welcome automation, and track delivery logs.
-        </p>
+    <div className="space-y-6 animate-fade-in p-1">
+      {/* Header Banner */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-gradient-to-r from-zinc-900 to-zinc-800 text-white rounded-2xl p-6 shadow-sm">
+        <div>
+          <div className="flex items-center gap-2">
+            <span className="bg-indigo-500 text-[10px] uppercase font-extrabold tracking-widest px-2 py-0.5 rounded-full">Pro Engine</span>
+            <span className="text-zinc-400 text-xs">• Dynamic Multitenancy Router</span>
+          </div>
+          <h2 className="text-2xl font-black mt-1 tracking-tight">CY Broadcast & Lead Center</h2>
+          <p className="text-zinc-300 text-xs mt-1 max-w-xl">
+            Design targeted welcoming automation, dispatch rich HTML news campaigns, query verified domain reputations, and review delivery callbacks.
+          </p>
+        </div>
+        <div className="flex gap-3 text-xs shrink-0 bg-white/10 p-3 rounded-xl border border-white/10 self-start md:self-center">
+          <div className="text-center px-2">
+            <div className="font-extrabold text-indigo-300 text-lg">{subscribers.length}</div>
+            <div className="text-[10px] text-zinc-300">Total Leads</div>
+          </div>
+          <div className="w-[1px] bg-white/20 my-1"></div>
+          <div className="text-center px-2">
+            <div className="font-extrabold text-emerald-400 text-lg">
+              {logs.filter(l => l.status === 'delivered').length + logs.filter(l => l.status === 'sent').length}
+            </div>
+            <div className="text-[10px] text-zinc-300">Delivered</div>
+          </div>
+          <div className="w-[1px] bg-white/20 my-1"></div>
+          <div className="text-center px-2">
+            <div className="font-extrabold text-amber-300 text-lg">3</div>
+            <div className="text-[10px] text-zinc-300">Web Properties</div>
+          </div>
+        </div>
       </div>
 
       {/* Tab Nav */}
-      <div className="flex gap-1 bg-zinc-100 p-1 rounded-xl w-fit flex-wrap">
+      <div className="flex gap-1.5 bg-zinc-100 p-1 rounded-xl w-full flex-wrap border border-zinc-200 shadow-2xs">
         {tabs.map((tab) => {
           const Icon = tab.icon;
           return (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+              className={`flex items-center gap-2 px-3.5 py-2.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
                 activeTab === tab.id
-                  ? 'bg-white text-zinc-900 shadow-sm'
-                  : 'text-zinc-500 hover:text-zinc-700'
+                  ? 'bg-white text-zinc-900 shadow-xs border border-zinc-200/40'
+                  : 'text-zinc-600 hover:text-zinc-900 hover:bg-zinc-200/50'
               }`}
             >
-              <Icon className="w-3.5 h-3.5" />
+              <Icon className="w-3.5 h-3.5 shrink-0" />
               {tab.label}
             </button>
           );
@@ -219,383 +417,660 @@ export default function EmailCenter() {
         </div>
       )}
 
-      {/* SEND CAMPAIGN TAB */}
+      {/* SEND NEWSLETTERS CAMPAIGN TAB */}
       {activeTab === 'send' && (
-        <div className="bg-white border border-zinc-200 rounded-xl p-6 shadow-xs space-y-5 max-w-2xl">
-          <h3 className="font-bold text-sm text-zinc-900">Compose Campaign</h3>
-
-          <div className="space-y-1">
-            <label className="text-xs font-semibold text-zinc-600">Select Website <span className="text-rose-500">*</span></label>
-            <select
-              value={siteKey}
-              onChange={(e) => setSiteKey(e.target.value)}
-              className="w-full text-xs py-2.5 px-3 bg-zinc-50 border border-zinc-200 rounded-lg text-zinc-800 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
-            >
-              {siteConfigs.map(s => <option key={s.siteKey} value={s.siteKey}>{s.brandName}</option>)}
-            </select>
-          </div>
-
-          <div className="space-y-1">
-            <label className="text-xs font-semibold text-zinc-600">Subject Line <span className="text-rose-500">*</span></label>
-            <input
-              type="text"
-              placeholder="e.g., Our latest updates are here 🚀"
-              value={subject}
-              onChange={(e) => setSubject(e.target.value)}
-              className="w-full text-xs py-2.5 px-3 bg-zinc-50 border border-zinc-200 rounded-lg text-zinc-800 placeholder-zinc-400 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
-            />
-          </div>
-
-          <div className="space-y-1">
-            <label className="text-xs font-semibold text-zinc-600">Message Body <span className="text-rose-500">*</span></label>
-            <textarea
-              rows={8}
-              placeholder="Write your email message here. HTML is supported."
-              value={message}
-              onChange={(e) => setMessage(e.target.value)}
-              className="w-full text-xs py-2.5 px-3 bg-zinc-50 border border-zinc-200 rounded-lg text-zinc-800 placeholder-zinc-400 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 font-mono resize-y"
-            />
-            <p className="text-[10px] text-zinc-400">HTML tags are supported (e.g. &lt;p&gt;, &lt;b&gt;, &lt;a&gt;)</p>
-          </div>
-
-          <div className="space-y-1">
-            <label className="text-xs font-semibold text-zinc-600">Send To</label>
-            <div className="flex gap-3">
-              <button
-                onClick={() => setSendTo('all')}
-                className={`flex-1 py-2.5 rounded-lg text-xs font-semibold border transition-all cursor-pointer ${
-                  sendTo === 'all'
-                    ? 'bg-indigo-600 text-white border-indigo-600'
-                    : 'bg-white text-zinc-600 border-zinc-200 hover:border-zinc-300'
-                }`}
-              >
-                All Subscribers ({subscribers.length})
-              </button>
-              <button
-                onClick={() => setSendTo('single')}
-                className={`flex-1 py-2.5 rounded-lg text-xs font-semibold border transition-all cursor-pointer ${
-                  sendTo === 'single'
-                    ? 'bg-indigo-600 text-white border-indigo-600'
-                    : 'bg-white text-zinc-600 border-zinc-200 hover:border-zinc-300'
-                }`}
-              >
-                Single Recipient
-              </button>
-            </div>
-          </div>
-
-          {sendTo === 'single' && (
-            <div className="space-y-1">
-              <label className="text-xs font-semibold text-zinc-600">Recipient Email</label>
-              <input
-                type="email"
-                placeholder="recipient@example.com"
-                value={singleEmail}
-                onChange={(e) => setSingleEmail(e.target.value)}
-                className="w-full text-xs py-2.5 px-3 bg-zinc-50 border border-zinc-200 rounded-lg text-zinc-800 placeholder-zinc-400 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
-              />
-            </div>
-          )}
-
-          {sendResult && (
-            <div className={`flex items-center gap-2 p-3 rounded-lg text-xs font-semibold ${
-              sendResult.ok
-                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                : 'bg-rose-50 text-rose-700 border border-rose-200'
-            }`}>
-              {sendResult.ok
-                ? <CheckCircle2 className="w-4 h-4 shrink-0" />
-                : <AlertCircle className="w-4 h-4 shrink-0" />
-              }
-              {sendResult.msg}
-            </div>
-          )}
-
-          <button
-            onClick={handleSendCampaign}
-            disabled={sending}
-            className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-xs font-semibold rounded-lg transition-all flex items-center justify-center gap-2 cursor-pointer"
-          >
-            {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-            {sending ? 'Sending...' : 'Send Campaign'}
-          </button>
-        </div>
-      )}
-
-      {/* WELCOME EMAIL TAB */}
-      {activeTab === 'welcome' && (
-        <div className="bg-white border border-zinc-200 rounded-xl p-6 shadow-xs space-y-5 max-w-2xl">
-          <div className="flex items-center justify-between">
-            <div>
-              <h3 className="font-bold text-sm text-zinc-900">Welcome Email Automation</h3>
-              <p className="text-xs text-zinc-500 mt-0.5">Automatically sent to every new subscriber when they sign up.</p>
-            </div>
-            <button
-              onClick={() => setWelcome(prev => ({ ...prev, enabled: !prev.enabled }))}
-              className="flex items-center gap-2 cursor-pointer"
-            >
-              {welcome.enabled
-                ? <ToggleRight className="w-8 h-8 text-indigo-600" />
-                : <ToggleLeft className="w-8 h-8 text-zinc-400" />
-              }
-              <span className={`text-xs font-semibold ${welcome.enabled ? 'text-indigo-600' : 'text-zinc-400'}`}>
-                {welcome.enabled ? 'Enabled' : 'Disabled'}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Editor Form */}
+          <div className="lg:col-span-2 bg-white border border-zinc-200 rounded-xl p-6 shadow-xs space-y-5">
+            <div className="flex items-center justify-between border-b border-zinc-100 pb-3">
+              <div>
+                <h3 className="font-bold text-sm text-zinc-900">Compose New Campaign</h3>
+                <p className="text-[11px] text-zinc-500">Send custom messages directly to specific system leads.</p>
+              </div>
+              <span className="text-[10px] bg-indigo-50 border border-indigo-100 text-indigo-700 font-bold px-2 py-0.5 rounded-md">
+                SMTP Active
               </span>
-            </button>
-          </div>
+            </div>
 
-          <div className={`space-y-4 ${!welcome.enabled ? 'opacity-50 pointer-events-none' : ''}`}>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-zinc-700">Select Sender Profile / Brand <span className="text-rose-500">*</span></label>
+                <select
+                  value={siteKey}
+                  onChange={(e) => setSiteKey(e.target.value)}
+                  className="w-full text-xs py-2.5 px-3 bg-zinc-50 border border-zinc-200 rounded-lg text-zinc-800 font-medium focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
+                >
+                  {siteConfigs.map(s => <option key={s.siteKey} value={s.siteKey}>{s.brandName}</option>)}
+                </select>
+                <p className="text-[10px] text-zinc-400">
+                  Will use brand prefix name & customized branding assets of <span className="underline font-bold text-zinc-600">
+                    {siteConfigs.find(s => s.siteKey === siteKey)?.brandName}
+                  </span>.
+                </p>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-zinc-700">Target Recipient Scope</label>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setSendTo('all')}
+                    className={`flex-1 py-2 text-xs font-semibold rounded-lg border transition-all cursor-pointer ${
+                      sendTo === 'all'
+                        ? 'bg-zinc-900 text-white border-zinc-900'
+                        : 'bg-white text-zinc-600 border-zinc-200 hover:bg-zinc-50'
+                    }`}
+                  >
+                    Site Subscribers ({subscribers.filter(s => (s.tenants?.site_key || 'cyvisahelp') === siteKey).length})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSendTo('single')}
+                    className={`flex-1 py-2 text-xs font-semibold rounded-lg border transition-all cursor-pointer ${
+                      sendTo === 'single'
+                        ? 'bg-zinc-900 text-white border-zinc-900'
+                        : 'bg-white text-zinc-600 border-zinc-200 hover:bg-zinc-50'
+                    }`}
+                  >
+                    Single Email
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {sendTo === 'single' && (
+              <div className="space-y-1 animate-fade-in">
+                <label className="text-xs font-semibold text-zinc-600">Recipient Email Address</label>
+                <input
+                  type="email"
+                  placeholder="e.g. lead-recipient@domain.com"
+                  value={singleEmail}
+                  onChange={(e) => setSingleEmail(e.target.value)}
+                  className="w-full text-xs py-2.5 px-3 bg-zinc-50 border border-zinc-200 rounded-lg text-zinc-800 placeholder-zinc-400 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
+                />
+              </div>
+            )}
+
             <div className="space-y-1">
-              <label className="text-xs font-semibold text-zinc-600">Welcome Email Subject</label>
+              <label className="text-xs font-bold text-zinc-700">Subject Line <span className="text-rose-500">*</span></label>
               <input
                 type="text"
-                value={welcome.subject}
-                onChange={(e) => setWelcome(prev => ({ ...prev, subject: e.target.value }))}
-                className="w-full text-xs py-2.5 px-3 bg-zinc-50 border border-zinc-200 rounded-lg text-zinc-800 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
+                placeholder="e.g., Secure your legal protection guide today! 🚀"
+                value={subject}
+                onChange={(e) => setSubject(e.target.value)}
+                className="w-full text-xs py-2.5 px-3 bg-zinc-50 border border-zinc-200 rounded-lg text-zinc-800 placeholder-zinc-400 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 font-medium"
               />
             </div>
 
             <div className="space-y-1">
-              <label className="text-xs font-semibold text-zinc-600">Welcome Email Body (HTML)</label>
+              <div className="flex justify-between items-center">
+                <label className="text-xs font-bold text-zinc-700">Message Content (HTML Supported) <span className="text-rose-500">*</span></label>
+                {message && !message.includes('{{Unsubscribe_Link}}') && (
+                  <span className="text-[10px] text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200 font-semibold">
+                    ⚠️ Missing Unsubscribe Link
+                  </span>
+                )}
+              </div>
               <textarea
-                rows={12}
-                value={welcome.body}
-                onChange={(e) => setWelcome(prev => ({ ...prev, body: e.target.value }))}
-                className="w-full text-xs py-2.5 px-3 bg-zinc-50 border border-zinc-200 rounded-lg text-zinc-800 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 font-mono resize-y"
+                rows={9}
+                placeholder="Write message here. Tip: Use HTML lists, and paragraphs freely with <p>, <ul>, <li>, <b> tags."
+                value={message}
+                onChange={(e) => setMessage(e.target.value)}
+                className="w-full text-xs py-2.5 px-3 bg-zinc-50 border border-zinc-200 rounded-lg text-zinc-800 placeholder-zinc-400 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 font-mono resize-y"
               />
-              <p className="text-[10px] text-zinc-400">Use HTML to format your welcome email. Use {`{email}`} to insert the subscriber's email address.</p>
+              <div className="flex justify-between text-[10px] text-zinc-400">
+                <span>Supports tag substitutions: <code>{`{email}`}</code>, <code>{`{name}`}</code></span>
+                <button 
+                  type="button" 
+                  onClick={() => setMessage(prev => prev + "\n\n<p style='font-size:11px;color:#94a3b8;'>If you wish to opt-out, please <a href='{{Unsubscribe_Link}}'>unsubscribe</a>.</p>")} 
+                  className="text-indigo-600 hover:underline font-bold"
+                >
+                  + Add opt-out footer
+                </button>
+              </div>
             </div>
 
-            {/* Live Preview */}
-            <div className="space-y-1">
-              <label className="text-xs font-semibold text-zinc-600">Preview</label>
-              <div
-                className="w-full p-4 bg-zinc-50 border border-zinc-200 rounded-lg text-xs text-zinc-800 prose prose-sm max-w-none"
-                dangerouslySetInnerHTML={{ __html: welcome.body }}
-              />
-            </div>
+            {sendResult && (
+              <div className={`p-3 rounded-lg text-xs font-semibold ${
+                sendResult.ok
+                  ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                  : 'bg-rose-50 text-rose-800 border border-rose-200'
+              }`}>
+                {sendResult.msg}
+              </div>
+            )}
+
+            <button
+              onClick={handleSendCampaign}
+              disabled={sending}
+              className="w-full py-3 bg-zinc-900 hover:bg-zinc-800 disabled:opacity-50 text-white text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-2 cursor-pointer shadow-xs"
+            >
+              {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4.5 h-4.5" />}
+              {sending ? 'Dispatching campaign...' : 'Send Campaign Broadcast Now'}
+            </button>
           </div>
 
-          <div className="flex items-center gap-3 pt-2 border-t border-zinc-100">
-            <button
-              onClick={handleSaveWelcome}
-              disabled={savingWelcome}
-              className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-xs font-semibold rounded-lg transition-all flex items-center gap-2 cursor-pointer"
-            >
-              {savingWelcome ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
-              Save Template
-            </button>
-            {welcomeSaved && (
-              <span className="text-xs text-emerald-600 font-semibold flex items-center gap-1">
-                <CheckCircle2 className="w-3.5 h-3.5" /> Saved!
-              </span>
-            )}
-            <button
-              onClick={() => setWelcome(DEFAULT_WELCOME)}
-              className="px-4 py-2.5 bg-white hover:bg-zinc-50 border border-zinc-200 text-zinc-600 text-xs font-semibold rounded-lg transition-all cursor-pointer ml-auto"
-            >
-              Reset to Default
-            </button>
+          {/* Real-time brand validator summary card */}
+          <div className="bg-zinc-50 border border-zinc-200 rounded-xl p-5 shadow-xs space-y-4 h-fit">
+            <h4 className="text-xs font-bold text-zinc-700 uppercase tracking-widest">Interactive Dispatch Guard</h4>
+            <p className="text-xs text-zinc-500 leading-normal">
+              Review how Resend will routerize and sign this campaign before broadcasting to live mailboxes:
+            </p>
+
+            <div className="space-y-3 font-mono text-[11px] bg-white border border-zinc-200 p-4 rounded-lg shadow-2xs">
+              <div>
+                <span className="text-zinc-400 block text-[9px] uppercase font-bold">Authenticated Sender:</span>
+                <span className="text-zinc-800 font-bold">{siteConfigs.find(s=>s.siteKey===siteKey)?.senderName} &lt;hello@cylawtech.com&gt;</span>
+              </div>
+              <div className="w-full h-[1px] bg-zinc-100"></div>
+              <div>
+                <span className="text-zinc-400 block text-[9px] uppercase font-bold">Envelope From Header:</span>
+                <span className="text-indigo-600 font-semibold">{siteKey}@cylawtech.com</span>
+              </div>
+              <div className="w-full h-[1px] bg-zinc-100"></div>
+              <div>
+                <span className="text-zinc-400 block text-[9px] uppercase font-bold">Reply-To Route:</span>
+                <span className="text-zinc-800">support@{siteKey}.com</span>
+              </div>
+              <div className="w-full h-[1px] bg-zinc-100"></div>
+              <div>
+                <span className="text-zinc-400 block text-[9px] uppercase font-bold">Recipient count:</span>
+                <span className="text-zinc-900 font-bold bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">
+                  {sendTo === 'all' 
+                    ? subscribers.filter(s => (s.tenants?.site_key || 'cyvisahelp') === siteKey).length + " active subscriber(s)"
+                    : "1 single recipient"
+                  }
+                </span>
+              </div>
+            </div>
+
+            <div className="p-3.5 bg-indigo-50 border border-indigo-100 text-indigo-900 rounded-lg text-xs space-y-1.5 leading-relaxed">
+              <p className="font-bold flex items-center gap-1">🛡️ Anti-Spam Security Protocol</p>
+              <p>
+                Our server dynamic router prefixes headers with your custom sub-client name format. Even under one sending domain, recipient mail servers separate reputation tracking cleanly.
+              </p>
+            </div>
           </div>
         </div>
       )}
 
-      {/* SUBSCRIBERS TAB */}
-      {activeTab === 'subscribers' && (
-        <div className="bg-white border border-zinc-200 rounded-xl p-6 shadow-xs space-y-4">
-          <h3 className="font-bold text-sm text-zinc-900">Subscribers</h3>
-
-          {/* Add subscriber */}
-          <div className="flex flex-col sm:flex-row gap-2 bg-zinc-50/50 p-4 rounded-xl border border-zinc-100">
-            <div className="flex-1 space-y-1">
-              <label className="text-[10px] uppercase font-bold tracking-wider text-zinc-400">Email Address</label>
-              <input
-                type="email"
-                placeholder="Add subscriber email..."
-                value={newEmail}
-                onChange={(e) => setNewEmail(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleAddSubscriber()}
-                className="w-full text-xs py-2 px-3 bg-white border border-zinc-200 rounded-lg text-zinc-800 placeholder-zinc-400 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
-              />
-            </div>
-            <div className="w-full sm:w-48 space-y-1">
-              <label className="text-[10px] uppercase font-bold tracking-wider text-zinc-400">Choose Website</label>
-              <select
-                value={addSiteKey}
-                onChange={(e) => setAddSiteKey(e.target.value)}
-                className="w-full text-xs py-2 px-2 bg-white border border-zinc-200 rounded-lg text-zinc-800 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
-              >
-                {siteConfigs.map(s => (
-                  <option key={s.siteKey} value={s.siteKey}>{s.brandName}</option>
-                ))}
-              </select>
-            </div>
-            <div className="flex items-end">
+      {/* WELCOME EMAIL AUTOMATION TAB */}
+      {activeTab === 'welcome' && (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Main settings panel */}
+          <div className="lg:col-span-2 bg-white border border-zinc-200 rounded-xl p-6 shadow-xs space-y-5">
+            <div className="border-b border-zinc-100 pb-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <h3 className="font-bold text-sm text-zinc-900">Custom Welcome Flow Setup</h3>
+                <p className="text-xs text-zinc-500 mt-0.5">Define unique autoresponders sent to new subscribers on signup.</p>
+              </div>
+              
               <button
-                onClick={handleAddSubscriber}
-                disabled={addingSubscriber}
-                className="w-full sm:w-auto px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold rounded-lg flex items-center justify-center gap-1.5 cursor-pointer h-[34px]"
+                onClick={() => setWelcome(prev => ({ ...prev, enabled: !prev.enabled }))}
+                className="flex items-center gap-2 self-start bg-zinc-50 border border-zinc-200 px-3 py-1.5 rounded-lg cursor-pointer"
               >
-                {addingSubscriber ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
-                Add
+                {welcome.enabled
+                  ? <ToggleRight className="w-7 h-7 text-indigo-600 shrink-0" />
+                  : <ToggleLeft className="w-7 h-7 text-zinc-400 shrink-0" />
+                }
+                <span className="text-xs font-bold text-zinc-700">
+                  {welcome.enabled ? 'ON' : 'OFF'}
+                </span>
+              </button>
+            </div>
+
+            {/* Site selector tabs specifically to configure welcome template for each site */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-zinc-700">Which web property welcome email are you editing?</label>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                {siteConfigs.map((s) => {
+                  const isSelected = welcomeSiteKey === s.siteKey;
+                  return (
+                    <button
+                      key={s.siteKey}
+                      type="button"
+                      onClick={() => setWelcomeSiteKey(s.siteKey)}
+                      className={`flex items-center gap-2.5 p-3 rounded-xl border text-xs font-bold cursor-pointer transition-all text-left ${
+                        isSelected
+                          ? `border-indigo-600 bg-indigo-50/25 shadow-2xs`
+                          : 'border-zinc-200 bg-white hover:bg-zinc-50 hover:border-zinc-300'
+                      }`}
+                    >
+                      <img src={s.logo} className="w-5.5 h-5.5 rounded-full shrink-0 border border-zinc-200" />
+                      <div>
+                        <p className="text-zinc-900 font-bold leading-none">{s.brandName}</p>
+                        <p className="text-[10px] text-zinc-400 font-normal mt-0.5">{s.siteKey}.com</p>
+                      </div>
+                      {isSelected && (
+                        <div className="ml-auto w-1.5 h-1.5 rounded-full bg-indigo-600" />
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {loadingWelcome ? (
+              <div className="flex flex-col items-center justify-center p-12 text-zinc-400 text-xs gap-2">
+                <Loader2 className="w-6 h-6 animate-spin text-indigo-600" />
+                <span>Synchronizing workspace template...</span>
+              </div>
+            ) : (
+              <div className={`space-y-4 ${!welcome.enabled ? 'opacity-40 pointer-events-none' : ''} animate-fade-in`}>
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-zinc-700">Welcome Subject Header</label>
+                  <input
+                    type="text"
+                    value={welcome.subject}
+                    onChange={(e) => setWelcome(prev => ({ ...prev, subject: e.target.value }))}
+                    className="w-full text-xs py-2.5 px-3 bg-zinc-50 border border-zinc-200 rounded-lg text-zinc-800 focus:outline-none focus:ring-1 focus:ring-indigo-500 font-medium"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-zinc-700">HTML Welcome Content</label>
+                  <textarea
+                    rows={11}
+                    value={welcome.body}
+                    onChange={(e) => setWelcome(prev => ({ ...prev, body: e.target.value }))}
+                    className="w-full text-xs py-2.5 px-3 bg-zinc-50 border border-zinc-200 rounded-lg text-zinc-800 focus:outline-none focus:ring-1 focus:ring-indigo-500 font-mono resize-y"
+                  />
+                  <p className="text-[10px] text-zinc-400">
+                    Formatting with tags is completely supported. Use <code>{`{email}`}</code> or <code>{`{name}`}</code> to personalize message strings dynamically.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            <div className="flex items-center gap-3 pt-4 border-t border-zinc-100 flex-wrap">
+              <button
+                onClick={handleSaveWelcome}
+                disabled={savingWelcome || loadingWelcome}
+                className="px-5 py-2.5 bg-zinc-900 hover:bg-zinc-800 text-white disabled:opacity-50 text-xs font-bold rounded-lg transition-all flex items-center gap-2 cursor-pointer shadow-2xs"
+              >
+                {savingWelcome ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
+                Save {siteConfigs.find(s=>s.siteKey===welcomeSiteKey)?.brandName} Welcome Template
+              </button>
+              {welcomeSaved && (
+                <span className="text-xs text-emerald-600 font-bold flex items-center gap-1 bg-emerald-50 px-2 py-1 rounded border border-emerald-100">
+                  <CheckCircle2 className="w-3.5 h-3.5" /> Template Stored In DB!
+                </span>
+              )}
+              <button
+                onClick={handleResetWelcomeToDefault}
+                className="px-4 py-2.5 bg-white hover:bg-zinc-50 border border-zinc-200 text-rose-600 hover:text-rose-700 text-xs font-bold rounded-lg transition-all cursor-pointer ml-auto flex items-center gap-1.5"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                Reset Site Fallback
               </button>
             </div>
           </div>
 
-          {/* List */}
-          <div className="divide-y divide-zinc-100 max-h-[400px] overflow-y-auto pr-1">
-            {subscribers.length === 0 ? (
-              <p className="text-xs text-zinc-400 py-6 text-center">No subscribers yet.</p>
-            ) : (
-              subscribers.map((s) => {
-                const siteKey = s.tenants?.site_key || 'cyvisahelp';
-                const brandName = s.tenants?.brand_name || 'CY Visa Help';
-                
-                // Customize badge color matching the site branding
-                let badgeColor = 'bg-slate-50 text-slate-700 border-slate-100';
-                if (siteKey === 'cylawtech') {
-                  badgeColor = 'bg-blue-50 text-blue-700 border-blue-200';
-                } else if (siteKey === 'cybarprep') {
-                  badgeColor = 'bg-rose-50 text-rose-700 border-rose-250';
-                }
+          {/* HTML live frame preview */}
+          <div className="space-y-4">
+            <div className="bg-white border border-zinc-200 rounded-xl p-5 shadow-xs space-y-3">
+              <h4 className="text-xs font-bold text-zinc-700 uppercase tracking-widest">Template Rendering Sandbox</h4>
+              <p className="text-xs text-zinc-400 leading-normal">
+                An active simulation in deep workspace of the actual rendered email sent to <strong>new subscribers</strong>:
+              </p>
 
-                return (
-                  <div key={s.id} className="flex items-center justify-between py-3 text-xs">
-                    <div className="flex items-center gap-2.5">
-                      <div className="w-6 h-6 rounded-full bg-zinc-100 text-zinc-700 flex items-center justify-center font-bold text-[10px]">
-                        {s.email.charAt(0).toUpperCase()}
-                      </div>
-                      <div className="flex flex-col">
-                        <span className="font-medium text-zinc-800">{s.email}</span>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className={`text-[10px] font-semibold border px-2 py-0.5 rounded ${badgeColor}`}>
-                        {brandName}
-                      </span>
-                      <span className="text-[10px] text-emerald-600 font-semibold bg-emerald-50 px-2 py-0.5 rounded">Active</span>
-                    </div>
-                  </div>
-                );
-              })
-            )}
+              <div className="border border-zinc-200 rounded-lg overflow-hidden bg-zinc-150">
+                <div className="bg-zinc-100 border-b border-zinc-200 px-3 py-2 flex items-center gap-1.5 text-[10px] text-zinc-500">
+                  <span className="w-2.5 h-2.5 rounded-full bg-rose-400"></span>
+                  <span className="w-2.5 h-2.5 rounded-full bg-amber-400"></span>
+                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-400"></span>
+                  <span className="font-mono text-[9px] ml-2 truncate">Subject: {welcome.subject}</span>
+                </div>
+                
+                {/* Visual simulated preview frame inside custom card */}
+                <div className="p-4 bg-zinc-50/50 max-h-[350px] overflow-y-auto">
+                  <div 
+                    className="bg-white border border-zinc-100 p-4 rounded shadow-2xs text-[11px] prose prose-zinc max-w-none break-words leading-relaxed"
+                    dangerouslySetInnerHTML={{ 
+                      __html: welcome.body.replace(/{email}/g, 'user-lead@domain.com') 
+                    }}
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-amber-50 p-4 rounded-xl border border-amber-100 text-[11px] text-amber-800 space-y-1">
+              <p className="font-bold flex items-center gap-1">💡 Pro-tip: Instant Personalization Test</p>
+              <p>Type custom tags inside input values. The rendering sandbox strips scripts automatically but accurately reproduces CSS tables on mobile clients.</p>
+            </div>
           </div>
         </div>
       )}
 
-      {/* LOGS TAB */}
+      {/* SUBSCRIBERS / LEAD MANAGER TAB */}
+      {activeTab === 'subscribers' && (
+        <div className="bg-white border border-zinc-200 rounded-xl p-6 shadow-xs space-y-5">
+          <div className="flex flex-col md:flex-row md:items-center justify-between border-b border-zinc-100 pb-4 gap-3">
+            <div>
+              <h3 className="font-bold text-sm text-zinc-900">Lead Subscribers Registry</h3>
+              <p className="text-xs text-zinc-500 mt-0.5 flex items-center gap-1">
+                <span>Direct overview of subscribers registered across active properties.</span>
+              </p>
+            </div>
+            
+            <div className="flex gap-2">
+              <span className="text-[10px] bg-emerald-50 text-emerald-700 font-bold px-2 py-1 rounded border border-emerald-100 inline-flex items-center gap-1">
+                <Check className="w-3 h-3" /> REST Connection Secured
+              </span>
+            </div>
+          </div>
+
+          {/* Setup filter and search toolbars */}
+          <div className="flex flex-col lg:flex-row gap-3">
+            {/* Filter buttons */}
+            <div className="flex flex-wrap gap-1 bg-zinc-100 p-1 rounded-lg border border-zinc-200 shrink-0 h-fit">
+              <button
+                type="button"
+                onClick={() => setSubFilterSite('all')}
+                className={`px-3 py-1.5 rounded-md text-[11px] font-bold transition-all cursor-pointer ${
+                  subFilterSite === 'all'
+                    ? 'bg-zinc-900 text-white shadow-2xs'
+                    : 'text-zinc-650 hover:text-zinc-900 hover:bg-zinc-200/50'
+                }`}
+              >
+                All ({subscribers.length})
+              </button>
+              {siteConfigs.map(s => {
+                const count = subscribers.filter(sub => (sub.tenants?.site_key || 'cyvisahelp') === s.siteKey).length;
+                return (
+                  <button
+                    key={s.siteKey}
+                    type="button"
+                    onClick={() => setSubFilterSite(s.siteKey)}
+                    className={`px-3 py-1.5 rounded-md text-[11px] font-bold transition-all cursor-pointer ${
+                      subFilterSite === s.siteKey
+                        ? 'bg-zinc-900 text-white shadow-2xs'
+                        : 'text-zinc-650 hover:text-zinc-900 hover:bg-zinc-200/50'
+                    }`}
+                  >
+                    {s.brandName} ({count})
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Keyword search input */}
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-2.5 h-4 w-4 text-zinc-400" />
+              <input
+                type="text"
+                placeholder="Search leads by email or registration name..."
+                value={subSearchQuery}
+                onChange={(e) => setSubSearchQuery(e.target.value)}
+                className="w-full pl-9 pr-4 py-2 bg-zinc-50 border border-zinc-200 rounded-lg text-xs placeholder-zinc-400 justify-center outline-none focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {/* List subscribers panel */}
+            <div className="md:col-span-2 space-y-2">
+              <div className="text-[10px] uppercase font-bold tracking-wider text-zinc-400 flex justify-between items-center bg-zinc-50 px-3 py-1.5 border border-zinc-150 rounded">
+                <span>Leads Match Details</span>
+                <span>Showing {filteredSubscribers.length} of {subscribers.length} entries</span>
+              </div>
+
+              <div className="border border-zinc-200 rounded-lg overflow-hidden max-h-[420px] overflow-y-auto divide-y divide-zinc-100">
+                {filteredSubscribers.length === 0 ? (
+                  <div className="text-center py-10 text-zinc-400 text-xs flex flex-col items-center justify-center gap-1 bg-zinc-50/50">
+                    <Filter className="w-6 h-6 text-zinc-300" />
+                    <span>No subscribers match criteria.</span>
+                  </div>
+                ) : (
+                  filteredSubscribers.map((s) => {
+                    const siteKey = s.tenants?.site_key || 'cyvisahelp';
+                    const brandName = s.tenants?.brand_name || 'CY Visa Help';
+                    
+                    let badgeColor = 'bg-slate-50 text-slate-700 border-slate-100';
+                    if (siteKey === 'cylawtech') {
+                      badgeColor = 'bg-blue-50 text-blue-700 border-blue-200';
+                    } else if (siteKey === 'cybarprep') {
+                      badgeColor = 'bg-rose-50 text-rose-700 border-rose-200';
+                    }
+
+                    return (
+                      <div key={s.id} className="flex items-center justify-between p-3 text-xs bg-white hover:bg-zinc-50/50 transition-colors">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-full bg-zinc-100 text-zinc-800 flex items-center justify-center font-extrabold text-[11px] border border-zinc-200/50">
+                            {s.email.charAt(0).toUpperCase()}
+                          </div>
+                          <div>
+                            <p className="font-bold text-zinc-800">{s.email}</p>
+                            {s.name && <p className="text-[10px] text-zinc-500 font-medium">{s.name}</p>}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className={`text-[10px] font-bold border px-2 py-0.5 rounded ${badgeColor}`}>
+                            {brandName}
+                          </span>
+                          <span className="text-[10px] text-emerald-600 font-bold bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-100">
+                            Active
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+
+            {/* Quick register user form */}
+            <div className="bg-zinc-50 border border-zinc-200 rounded-xl p-5 shadow-2xs h-fit space-y-4">
+              <div>
+                <h4 className="text-xs font-bold text-zinc-700 uppercase tracking-widest">Manual Sub-Registration</h4>
+                <p className="text-[11px] text-zinc-500 mt-1 leading-normal">
+                  Manually introduce leads signed up over phone or offline campaigns into specific tenants:
+                </p>
+              </div>
+
+              <div className="space-y-3.5">
+                <div className="space-y-1">
+                  <label className="text-[10px] uppercase font-extrabold text-zinc-500">Contact Email <span className="text-rose-500">*</span></label>
+                  <input
+                    type="email"
+                    placeholder="e.g. client@example.com"
+                    value={newEmail}
+                    onChange={(e) => setNewEmail(e.target.value)}
+                    className="w-full text-xs py-2 px-3 bg-white border border-zinc-200 rounded-lg outline-none focus:ring-1 focus:ring-indigo-500"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[10px] uppercase font-extrabold text-zinc-500">Client Name</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Michael Scott"
+                    value={newName}
+                    onChange={(e) => setNewName(e.target.value)}
+                    className="w-full text-xs py-2 px-3 bg-white border border-zinc-200 rounded-lg outline-none focus:ring-1 focus:ring-indigo-500"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[10px] uppercase font-extrabold text-zinc-500">Choose Website Property</label>
+                  <select
+                    value={addSiteKey}
+                    onChange={(e) => setAddSiteKey(e.target.value)}
+                    className="w-full text-xs py-2.5 px-2 bg-white border border-zinc-200 rounded-lg outline-none cursor-pointer focus:ring-1 focus:ring-indigo-500 text-zinc-750"
+                  >
+                    {siteConfigs.map(s => (
+                      <option key={s.siteKey} value={s.siteKey}>{s.brandName}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <button
+                  onClick={handleAddSubscriber}
+                  disabled={addingSubscriber}
+                  className="w-full py-2.5 bg-zinc-900 border border-zinc-950 text-white text-xs font-bold rounded-lg flex items-center justify-center gap-1.5 hover:bg-zinc-800 cursor-pointer disabled:opacity-50"
+                >
+                  {addingSubscriber ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-4 h-4" />}
+                  Register lead
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* DELIVERY LOGS TAB */}
       {activeTab === 'logs' && (
         <div className="bg-white border border-zinc-200 rounded-xl p-6 shadow-xs space-y-4">
-          <h3 className="font-bold text-sm text-zinc-900">Email Delivery Logs</h3>
+          <div className="border-b border-zinc-100 pb-3 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+            <div>
+              <h3 className="font-bold text-sm text-zinc-900">Email Delivery Logs</h3>
+              <p className="text-xs text-zinc-500">Overview of successfully dispatched campaign messages and system tests.</p>
+            </div>
 
-          {logs.length === 0 ? (
-            <p className="text-xs text-zinc-400 py-6 text-center">No emails sent yet.</p>
-          ) : (
-            <div className="divide-y divide-zinc-100">
-              {logs.map((log, i) => (
-                <div key={i} className="flex items-center justify-between py-3 gap-4">
-                  <div className="min-w-0 flex-1">
-                    <p className="text-xs font-semibold text-zinc-800 truncate">{log.subject}</p>
-                    <p className="text-[11px] text-zinc-500 mt-0.5 truncate">To: {log.to}</p>
+            {/* Quick statistics badge */}
+            <div className="flex gap-2">
+              <span className="text-[10px] bg-indigo-50 text-indigo-700 font-bold px-2 py-0.5 rounded border border-indigo-100">
+                Resend Sync Live
+              </span>
+            </div>
+          </div>
+
+          {/* Quick logger search and status filtering tools */}
+          <div className="flex flex-col sm:flex-row gap-3">
+            {/* Search input */}
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-2.5 h-4 w-4 text-zinc-400" />
+              <input
+                type="text"
+                placeholder="Search logs by email address or subject..."
+                value={logSearchQuery}
+                onChange={(e) => setLogSearchQuery(e.target.value)}
+                className="w-full pl-9 pr-4 py-2 bg-zinc-50 border border-zinc-200 rounded-lg text-xs outline-none focus:ring-1 focus:ring-indigo-500"
+              />
+            </div>
+
+            {/* Logger filter by status */}
+            <div className="sm:w-48">
+              <select
+                value={logFilterStatus}
+                onChange={(e) => setLogFilterStatus(e.target.value)}
+                className="w-full text-xs py-2 px-3 bg-zinc-50 border border-zinc-200 rounded-lg outline-none cursor-pointer focus:ring-1 focus:ring-indigo-500 text-zinc-700"
+              >
+                <option value="all">All Logger Statuses</option>
+                <option value="delivered">Delivered</option>
+                <option value="sent">Sent</option>
+                <option value="bounced">Bounced Only</option>
+                <option value="complaint">Complaints</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="border border-zinc-200 rounded-xl overflow-hidden divide-y divide-zinc-100 bg-white">
+            {filteredLogs.length === 0 ? (
+              <p className="text-xs text-zinc-400 py-12 text-center bg-zinc-50/50">No logs match selection parameters.</p>
+            ) : (
+              filteredLogs.map((log, i) => (
+                <div key={i} className="flex flex-col sm:flex-row sm:items-center justify-between p-3.5 gap-4 hover:bg-zinc-50 transition-all text-xs">
+                  <div className="min-w-0 flex-1 space-y-0.5">
+                    <p className="text-xs font-bold text-zinc-800 truncate">{log.subject}</p>
+                    <div className="flex items-center gap-1.5 text-zinc-500 text-[11px] truncate">
+                      <span className="font-medium text-indigo-700">Recipient:</span> {log.to}
+                      <span className="text-zinc-350">•</span>
+                      <span className="text-zinc-400">Type: <span className="font-mono bg-zinc-100 px-1 py-0.2 rounded text-zinc-650">{log.type}</span></span>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-3 shrink-0">
+                  <div className="flex items-center gap-3 shrink-0 self-start sm:self-center">
                     <span className="text-[10px] text-zinc-400 font-mono">
                       {log.created_at ? new Date(log.created_at).toLocaleString() : ''}
                     </span>
-                    <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-md border ${
+                    <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded-md border ${
                       log.status === 'sent' || log.status === 'delivered'
-                        ? 'bg-emerald-50 text-emerald-700 border-emerald-100'
+                        ? 'bg-emerald-50 text-emerald-800 border-emerald-150'
                         : log.status === 'complaint'
-                        ? 'bg-amber-50 text-amber-700 border-amber-100'
-                        : 'bg-rose-50 text-rose-700 border-rose-100'
+                        ? 'bg-amber-50 text-amber-800 border-amber-100'
+                        : 'bg-rose-50 text-rose-800 border-rose-100'
                     }`}>
                       {log.status?.toUpperCase()}
                     </span>
                   </div>
                 </div>
-              ))}
-            </div>
-          )}
+              ))
+            )}
+          </div>
         </div>
       )}
 
-      {/* TEST API TAB */}
-      {activeTab === 'test' && (
-        <TestEmailTab />
-      )}
-
-      {/* CONNECT WEBSITE / INTEGRATION TAB */}
+      {/* EMBEDDED LEADS SIGNUP FORM CODE TAB */}
       {activeTab === 'integration' && (
         <div className="bg-white border border-zinc-200 rounded-xl p-6 shadow-xs space-y-6">
           <div>
-            <h3 className="font-bold text-sm text-zinc-900">Connect Your External Website</h3>
+            <h3 className="font-bold text-sm text-zinc-900">Connect External Forms via Dynamic Routing</h3>
             <p className="text-xs text-zinc-500 mt-0.5">
-              Integrate your retail store (<span className="underline font-medium text-indigo-600">https://xtop-retail.onrender.com</span>) or other pages to collect leads and trigger instant welcomes.
+              Integrate your main storefront (<span className="underline font-bold text-indigo-600">https://cylawtech.com</span>) or educational landing pages to automatically subscribe users and trigger custom welcomes.
             </p>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {/* Left sidebar: Site selector */}
+            {/* Left sidebar site selector */}
             <div className="space-y-4">
               <div className="space-y-1">
-                <label className="text-xs font-semibold text-zinc-600">Target Website Brand</label>
+                <label className="text-xs font-bold text-zinc-600">Dynamic Styling Sandbox Profile</label>
                 <div className="space-y-2">
                   {siteConfigs.map((s) => (
                     <button
                       key={s.siteKey}
+                      type="button"
                       onClick={() => setSiteKey(s.siteKey)}
                       className={`w-full flex items-center gap-3 p-3 text-align-left rounded-lg border text-xs font-semibold transition-all cursor-pointer text-left ${
                         siteKey === s.siteKey
-                          ? 'border-indigo-600 bg-indigo-50/50 text-indigo-900'
+                          ? 'border-indigo-600 bg-indigo-50/50 text-indigo-950'
                           : 'border-zinc-200 bg-white hover:bg-zinc-50 text-zinc-700'
                       }`}
                     >
-                      <img src={s.logo} className="w-6 h-6 rounded-full shrink-0" />
+                      <img src={s.logo} className="w-6 h-6 rounded-full shrink-0 border" />
                       <div>
-                        <p className="font-bold">{s.brandName}</p>
-                        <p className="text-[10px] text-zinc-400 font-normal">{s.website}</p>
+                        <p className="font-bold text-zinc-800 leading-none">{s.brandName}</p>
+                        <p className="text-[10px] text-zinc-400 font-normal mt-1">{s.website}</p>
                       </div>
                     </button>
                   ))}
                 </div>
               </div>
 
-              <div className="p-3 bg-indigo-50 border border-indigo-100 rounded-lg text-[11px] text-indigo-800 space-y-1.5 leading-relaxed">
-                <p className="font-bold flex items-center gap-1">
-                  💡 Dynamic Branding Architecture
-                </p>
-                <p>
-                  Incoming leads tagged with <code className="font-mono bg-indigo-100 px-1 rounded">siteKey: "{siteKey}"</code> will automatically receive customized emails branded with <strong>{siteConfigs.find(s => s.siteKey === siteKey)?.brandName}</strong> colors, sender names, and logos.
+              <div className="p-3 bg-zinc-50 border border-zinc-200 rounded-lg text-xs space-y-1.5 leading-relaxed">
+                <p className="font-bold text-zinc-800 flex items-center gap-1">🌐 API Key Autodetect</p>
+                <p className="text-[11px] text-zinc-500">
+                  Requesting endpoint automatically routes entries configured with <code className="bg-zinc-100 font-mono px-1 rounded font-bold">siteKey: "{siteKey}"</code> to appropriate tenants, applying custom styles instantly.
                 </p>
               </div>
             </div>
 
-            {/* Right details: Code generator */}
+            {/* Form code generator */}
             <div className="md:col-span-2 space-y-5">
               {/* Box 1: Drop-in HTML form code */}
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <h4 className="font-bold text-xs text-zinc-800">1. Instant HTML Form Snippet</h4>
-                  <span className="text-[10px] bg-emerald-50 text-emerald-700 font-semibold px-2 py-0.5 rounded">Ready to Embed</span>
+                  <h4 className="font-bold text-xs text-zinc-800">1. Raw HTML Form Code Snippet</h4>
+                  <span className="text-[9px] bg-emerald-50 text-emerald-700 font-bold px-2 py-0.5 rounded">Embeddable Widget</span>
                 </div>
                 <p className="text-[11px] text-zinc-500">
-                  Copy and paste this production-ready stylesheet and signup form anywhere on your retail site.
+                  Embed this responsive stylesheet and lead trigger markup directly into your external website properties:
                 </p>
 
                 <div className="relative">
                   <textarea
                     readOnly
                     rows={8}
-                    className="w-full text-[11px] font-mono p-3 bg-zinc-900 text-zinc-300 border border-zinc-800 rounded-lg focus:outline-none resize-none leading-relaxed"
-                    value={"<!-- Paste this into your website at https://xtop-retail.onrender.com/ -->\n" +
+                    className="w-full text-[11px] font-mono p-3 bg-zinc-900 text-zinc-300 border border-zinc-950 rounded-lg focus:outline-none resize-none leading-relaxed"
+                    value={"<!-- Embed Form Anywhere On Your HTML Website -->\n" +
 "<div id=\"cy-newsletter-embed\" style=\"font-family: system-ui, sans-serif; max-width: 400px; padding: 24px; border: 1px solid #e4e4e7; border-radius: 12px; background: #ffffff;\">\n" +
-"  <h3 style=\"margin: 0 0 8px 0; font-size: 16px; font-weight: 700; color: #18181b;\">Subscribe to our updates</h3>\n" +
-"  <p style=\"margin: 0 0 16px 0; font-size: 12px; color: #71717a;\">Get instant updates and newsletters from " + siteConfigs.find(s => s.siteKey === siteKey)?.brandName + ".</p>\n" +
+"  <h3 style=\"margin: 0 0 8px 0; font-size: 16px; font-weight: 700; color: #18181b;\">Join our " + siteConfigs.find(s => s.siteKey === siteKey)?.brandName + " updates</h3>\n" +
+"  <p style=\"margin: 0 0 16px 0; font-size: 12px; color: #71717a;\">Receive exclusive updates, automated strategy briefings and templates directly.</p>\n" +
 "  \n" +
 "  <form id=\"cy-subscribe-form\" style=\"display: flex; flex-direction: column; gap: 8px;\">\n" +
 "    <input type=\"text\" id=\"cy-name-input\" placeholder=\"Enter your name\" required style=\"padding: 10px 12px; font-size: 13px; border: 1px solid #e4e4e7; border-radius: 6px; outline: none; background: #f4f4f5;\" />\n" +
 "    <input type=\"email\" id=\"cy-email-input\" placeholder=\"Enter your email\" required style=\"padding: 10px 12px; font-size: 13px; border: 1px solid #e4e4e7; border-radius: 6px; outline: none; background: #f4f4f5;\" />\n" +
-"    <button type=\"submit\" id=\"cy-submit-btn\" style=\"padding: 10px; font-size: 13px; font-weight: 600; color: #ffffff; background: " + siteConfigs.find(s => s.siteKey === siteKey)?.primaryColor + "; border: none; border-radius: 6px; cursor: pointer;\">\n" +
+"    <button type=\"submit\" id=\"cy-submit-btn\" style=\"padding: 10px; font-size: 13px; font-weight: 600; color: #ffffff; background: " + (siteConfigs.find(s => s.siteKey === siteKey)?.primaryColor || '#1d4ed8') + "; border: none; border-radius: 6px; cursor: pointer;\">\n" +
 "      Subscribe\n" +
 "    </button>\n" +
 "  </form>\n" +
@@ -615,7 +1090,7 @@ export default function EmailCenter() {
 "    msg.style.display = \"none\";\n" +
 "    \n" +
 "    try {\n" +
-"      const res = await fetch(\"https://xtop-retail.onrender.com/api/external/subscribe\", {\n" +
+"      const res = await fetch(\"" + window.location.origin + "/api/external/subscribe\", {\n" +
 "        method: \"POST\",\n" +
 "        headers: { \"Content-Type\": \"application/json\" },\n" +
 "        body: JSON.stringify({ email: email, name: name, siteKey: \"" + siteKey + "\" })\n" +
@@ -632,7 +1107,7 @@ export default function EmailCenter() {
 "        msg.style.color = \"#dc2626\";\n" +
 "      }\n" +
 "    } catch (err) {\n" +
-"      msg.textContent = \"❌ Connection with CY Email Engine failed.\";\n" +
+"      msg.textContent = \"❌ Connection with cy-router system failed.\";\n" +
 "      msg.style.color = \"#dc2626\";\n" +
 "    } finally {\n" +
 "      btn.disabled = false;\n" +
@@ -645,27 +1120,14 @@ export default function EmailCenter() {
                 </div>
               </div>
 
-              {/* Box 2: REST API fetch Request */}
-              <div className="space-y-2">
-                <h4 className="font-bold text-xs text-zinc-800">2. Programmatic Integration (Fetch API)</h4>
-                <p className="text-[11px] text-zinc-500">
-                  Trigger subscription programmatically in your custom Javascript or React apps.
-                </p>
-                <div className="relative">
-                  <pre className="text-[11px] font-mono p-3 bg-zinc-900 text-zinc-300 border border-zinc-800 rounded-lg overflow-x-auto leading-relaxed">
-{"fetch(..." + " ...)"}
-                  </pre>
-                </div>
-              </div>
-
               {/* Box 3: curl Request */}
               <div className="space-y-2">
-                <h4 className="font-bold text-xs text-zinc-800">3. Backend / Terminal Test (cURL)</h4>
+                <h4 className="font-bold text-xs text-zinc-800">2. Backend / Terminal Test (cURL)</h4>
                 <div className="relative">
-                  <pre className="text-[11px] font-mono p-3 bg-zinc-900 text-zinc-300 border border-zinc-800 rounded-lg overflow-x-auto leading-relaxed">
-{"curl -X POST 'https://xtop-retail.onrender.com/api/external/subscribe' " +
-"  -H 'Content-Type: application/json' " +
-"  -d '{\"siteKey\": \"...\", \"email\": \"test-user@domain.com\", \"name\": \"Jane Doe\"}'"}
+                  <pre className="text-[11px] font-mono p-3 bg-zinc-900 text-zinc-300 border border-zinc-950 rounded-lg overflow-x-auto leading-relaxed select-all">
+{"curl -X POST '" + window.location.origin + "/api/external/subscribe' \\\n" +
+"  -H 'Content-Type: application/json' \\\n" +
+"  -d " + JSON.stringify(JSON.stringify({ siteKey, email: "lead@domain.com", name: "John Doe" }))}
                   </pre>
                 </div>
               </div>
@@ -673,38 +1135,44 @@ export default function EmailCenter() {
           </div>
         </div>
       )}
-      {/* DEBUG LOGS TAB */}
+
+      {/* TEST API TAB */}
+      {activeTab === 'test' && (
+        <TestEmailTab />
+      )}
+
+      {/* DEBUG ATTEMPT LOGS */}
       {activeTab === 'debug' && (
         <div className="bg-white border border-zinc-200 rounded-xl p-6 shadow-xs space-y-4">
-          <div className="flex justify-between items-center">
+          <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-3">
             <div>
               <h3 className="font-bold text-sm text-zinc-900">Subscription Attempt Logs</h3>
-              <p className="text-xs text-zinc-500">Monitoring internal subscription attempts.</p>
+              <p className="text-xs text-zinc-500">Monitoring internal raw database transactions.</p>
             </div>
             <button 
               onClick={async () => {
                 try {
                   const res = await fetch('/api/health-check');
                   const data = await res.json();
-                  alert(res.ok ? "Connected: " + JSON.stringify(data) : "Error: " + data.message);
+                  alert(res.ok ? "Database status: Verified! " + JSON.stringify(data) : "Database Error: " + data.message);
                   fetchData();
-                } catch(e) { alert('Connection error'); }
+                } catch(e) { alert('Check connection failed.'); }
               }}
-              className="text-xs px-3 py-1.5 bg-zinc-900 text-white rounded hover:bg-zinc-800"
+              className="text-xs px-3.5 py-2.5 bg-zinc-900 text-white rounded-lg hover:bg-zinc-800 font-bold flex shrink-0"
             >
-              Check Connection
+              Verify DB Integrity Link
             </button>
           </div>
 
           {!debugLogs || debugLogs.length === 0 ? (
-            <p className="text-xs text-zinc-400 py-6 text-center">No debug logs yet.</p>
+            <p className="text-xs text-zinc-400 py-6 text-center">No debug records generated yet.</p>
           ) : (
-            <div className="divide-y divide-zinc-100">
+            <div className="divide-y divide-zinc-100 max-h-[400px] overflow-y-auto">
               {debugLogs.map((log, i) => (
                 <div key={i} className="flex items-center justify-between py-3 gap-4">
                   <div className="min-w-0 flex-1">
-                    <p className={"text-xs font-semibold truncate " + (log.type === 'ERROR' ? 'text-rose-700' : 'text-zinc-800')}>{log.type}</p>
-                    <p className="text-[11px] text-zinc-500 mt-0.5 break-words">{log.message}</p>
+                    <p className={"text-xs font-semibold truncate " + (log.type === 'ERROR' ? 'text-rose-700' : 'text-indigo-900')}>{log.type}</p>
+                    <p className="text-[11px] text-zinc-500 mt-0.5 break-words font-mono bg-zinc-50 p-2 border border-zinc-150 rounded">{log.message}</p>
                   </div>
                   <div className="shrink-0 text-[10px] text-zinc-400 font-mono">
                     {new Date(log.timestamp).toLocaleTimeString()}
@@ -728,7 +1196,7 @@ function TestEmailTab() {
 
   const handleTestSend = async () => {
     if (!to || !subject || !message) {
-      setResult({ ok: false, msg: 'All fields are required.' });
+      setResult({ ok: false, msg: 'All key fields are required.' });
       return;
     }
     setSending(true);
@@ -741,12 +1209,12 @@ function TestEmailTab() {
       });
       const data = await res.json();
       if (res.ok) {
-        setResult({ ok: true, msg: 'Email sent successfully!' });
+        setResult({ ok: true, msg: 'Direct test email dispatched successfully via SMTP tunnel!' });
       } else {
-        setResult({ ok: false, msg: data.error || 'Failed to send email.' });
+        setResult({ ok: false, msg: data.error || 'SMTP gateway rejected transaction.' });
       }
     } catch (e: any) {
-      setResult({ ok: false, msg: e.message || 'Error occurred.' });
+      setResult({ ok: false, msg: e.message || 'Fatal communication error.' });
     } finally {
       setSending(false);
     }
@@ -754,24 +1222,28 @@ function TestEmailTab() {
 
   return (
     <div className="bg-white border border-zinc-200 rounded-xl p-6 shadow-xs space-y-5 max-w-2xl">
-      <h3 className="font-bold text-sm text-zinc-900">Test Send Email API</h3>
+      <div>
+        <h3 className="font-bold text-sm text-zinc-900">Direct Send Bypass API</h3>
+        <p className="text-xs text-zinc-500">Test transactional server parameters bypass restrictions for fast debugging.</p>
+      </div>
+
       <div className="space-y-1">
-        <label className="text-xs font-semibold text-zinc-600">To</label>
-        <input type="email" value={to} onChange={(e) => setTo(e.target.value)} className="w-full text-xs py-2.5 px-3 bg-zinc-50 border border-zinc-200 rounded-lg" />
+        <label className="text-xs font-bold text-zinc-700">To (Target Mailbox)</label>
+        <input type="email" placeholder="e.g. administrator@domain.com" value={to} onChange={(e) => setTo(e.target.value)} className="w-full text-xs py-2.5 px-3 bg-zinc-50 border border-zinc-200 rounded-lg outline-none focus:ring-1 focus:ring-indigo-500" />
       </div>
       <div className="space-y-1">
-        <label className="text-xs font-semibold text-zinc-600">Subject</label>
-        <input type="text" value={subject} onChange={(e) => setSubject(e.target.value)} className="w-full text-xs py-2.5 px-3 bg-zinc-50 border border-zinc-200 rounded-lg" />
+        <label className="text-xs font-bold text-zinc-700">Subject</label>
+        <input type="text" placeholder="e.g. SMTP Connectivity Test" value={subject} onChange={(e) => setSubject(e.target.value)} className="w-full text-xs py-2.5 px-3 bg-zinc-50 border border-zinc-200 rounded-lg outline-none focus:ring-1 focus:ring-indigo-500" />
       </div>
       <div className="space-y-1">
-        <label className="text-xs font-semibold text-zinc-600">Message</label>
-        <textarea rows={5} value={message} onChange={(e) => setMessage(e.target.value)} className="w-full text-xs py-2.5 px-3 bg-zinc-50 border border-zinc-200 rounded-lg" />
+        <label className="text-xs font-bold text-zinc-700">Message Plaintext Body</label>
+        <textarea rows={5} placeholder="Type test variables here..." value={message} onChange={(e) => setMessage(e.target.value)} className="w-full text-xs py-2.5 px-3 bg-zinc-50 border border-zinc-200 rounded-lg outline-none resize-y focus:ring-1 focus:ring-indigo-500" />
       </div>
-      <button onClick={handleTestSend} disabled={sending} className="py-2.5 bg-indigo-600 text-white rounded-lg w-full text-xs font-semibold">
-        {sending ? 'Sending...' : 'Send Test Email'}
+      <button onClick={handleTestSend} disabled={sending} className="py-2.5 bg-zinc-900 text-white hover:bg-zinc-800 transition-colors rounded-lg w-full text-xs font-bold shadow-xs cursor-pointer">
+        {sending ? 'Sending...' : 'Dispatch Test Request Gate'}
       </button>
       {result && (
-        <div className={"p-3 rounded-lg text-xs " + (result.ok ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700')}>
+        <div className={"p-3 rounded-lg text-xs font-semibold border " + (result.ok ? 'bg-emerald-50 text-emerald-850 border-emerald-100' : 'bg-rose-50 text-rose-850 border-rose-100')}>
           {result.msg}
         </div>
       )}
@@ -832,7 +1304,6 @@ function EmailHealthTab({ logs, onRefreshSim, subscribers }: EmailHealthTabProps
   const complaintsCount = logs.filter((l) => l.status === 'complaint').length;
   const sentOnlyCount = logs.filter((l) => l.status === 'sent').length;
 
-  // For visual tracking, emails are delivered unless they are explicitly bounced/complained
   const validDeliveredCount = deliveredCount + sentOnlyCount;
   const deliveryRate = totalLogs > 0 ? (validDeliveredCount / totalLogs) * 100 : 100.0;
   const bounceRate = totalLogs > 0 ? (bouncedCount / totalLogs) * 100 : 0.0;
@@ -918,24 +1389,24 @@ function EmailHealthTab({ logs, onRefreshSim, subscribers }: EmailHealthTabProps
             <p className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">Active Brand Router</p>
             <h3 className="text-sm font-bold text-zinc-800 mt-2">CylawTech Sender Ident</h3>
             
-            <div className="mt-3 space-y-1.5 font-mono text-[11px] text-zinc-600 bg-zinc-50 p-2.5 rounded-lg border border-zinc-100">
+            <div className="mt-3 space-y-1.5 font-mono text-[11px] text-zinc-650 bg-zinc-50 p-2.5 rounded-lg border border-zinc-100">
               <div className="flex justify-between">
                 <span className="text-zinc-400">Sender:</span>
-                <span className="text-zinc-900 font-semibold">hello@cylawtech.com</span>
+                <span className="text-zinc-900 font-semibold text-right">hello@cylawtech.com</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-zinc-400">Reply-To:</span>
-                <span className="text-zinc-900">support@cylawtech.com</span>
+                <span className="text-zinc-900 text-right">support@cylawtech.com</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-zinc-400">Env Override:</span>
-                <span className="text-amber-600 font-semibold">Active</span>
+                <span className="text-indigo-600 font-semibold text-right">Active</span>
               </div>
             </div>
           </div>
 
           <p className="text-[10px] text-zinc-400 leading-relaxed mt-3">
-            We prepared configurations to support sending from <strong className="font-semibold text-zinc-600">hello@mail.cylawtech.com</strong> soon. Adjust variables in <code className="bg-zinc-100 px-1 py-0.5 rounded">.env</code> easily.
+            Your customized dynamic routing prefixes titles using custom user labels on SMTP transactions.
           </p>
         </div>
 
@@ -945,19 +1416,19 @@ function EmailHealthTab({ logs, onRefreshSim, subscribers }: EmailHealthTabProps
 
           <div className="grid grid-cols-2 gap-3">
             <div className="p-2 bg-emerald-50/50 border border-emerald-100/40 rounded-lg">
-              <span className="text-[10px] text-zinc-500">Delivered</span>
+              <span className="text-[10px] text-zinc-500 font-semibold">Delivered</span>
               <p className="text-base font-bold text-emerald-700">{validDeliveredCount}</p>
             </div>
             <div className="p-2 bg-rose-50/50 border border-rose-100/40 rounded-lg">
-              <span className="text-[10px] text-zinc-500">Bounced</span>
+              <span className="text-[10px] text-zinc-500 font-semibold">Bounced</span>
               <p className="text-base font-bold text-rose-700">{bouncedCount}</p>
             </div>
             <div className="p-2 bg-amber-50/50 border border-amber-100/40 rounded-lg">
-              <span className="text-[10px] text-zinc-500">Complaints</span>
+              <span className="text-[10px] text-zinc-500 font-semibold">Complaints</span>
               <p className="text-base font-bold text-amber-700">{complaintsCount}</p>
             </div>
             <div className="p-2 bg-zinc-50 border border-zinc-100 rounded-lg">
-              <span className="text-[10px] text-zinc-500">Total Despatched</span>
+              <span className="text-[10px] text-zinc-500 font-semibold">Total Despatched</span>
               <p className="text-base font-bold text-zinc-700">{totalLogs}</p>
             </div>
           </div>
@@ -975,7 +1446,7 @@ function EmailHealthTab({ logs, onRefreshSim, subscribers }: EmailHealthTabProps
             <button
               onClick={checkDns}
               disabled={dnsValidating}
-              className="text-[11px] font-semibold text-indigo-600 hover:text-indigo-800 disabled:opacity-50 flex items-center gap-1.5 cursor-pointer bg-indigo-50 hover:bg-indigo-100 px-2.5 py-1 rounded-md transition-all"
+              className="text-[11px] font-semibold text-indigo-600 hover:text-indigo-800 disabled:opacity-50 flex items-center gap-1.5 cursor-pointer bg-indigo-50 hover:bg-indigo-100 px-2.5 py-1 rounded-md transition-all border border-indigo-200/50"
             >
               {dnsValidating ? 'Checking...' : 'Check Records'}
             </button>
@@ -984,57 +1455,57 @@ function EmailHealthTab({ logs, onRefreshSim, subscribers }: EmailHealthTabProps
           <div className="space-y-2.5">
             {/* SPF Check */}
             <div className="flex items-center justify-between p-3 bg-zinc-50 border border-zinc-100 rounded-lg text-xs">
-              <div className="space-y-0.5">
-                <span className="font-bold text-zinc-700">SPF (Sender Policy Framework)</span>
-                <p className="text-[10px] text-zinc-400 font-mono">v=spf1 include:resend.com ~all</p>
+              <div className="space-y-0.5 min-w-0 pr-2">
+                <span className="font-bold text-zinc-750 block truncate">SPF (Sender Policy Framework)</span>
+                <p className="text-[10px] text-zinc-400 font-mono truncate">v=spf1 include:resend.com ~all</p>
               </div>
               {dnsResults?.spfStatus ? (
-                <span className="flex items-center gap-1 text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-100">
+                <span className="flex items-center gap-1 text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-100 shrink-0">
                   <Check className="w-3 h-3" /> VERIFIED
                 </span>
               ) : (
-                <span className="flex items-center gap-1 text-[10px] font-bold text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-100">
-                  <AlertTriangle className="w-3 h-3" /> UNCONFIGURED
+                <span className="flex items-center gap-1 text-[10px] font-bold text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-100 shrink-0">
+                  <AlertCircle className="w-3 h-3" /> UNCONFIGURED
                 </span>
               )}
             </div>
 
             {/* DKIM Check */}
             <div className="flex items-center justify-between p-3 bg-zinc-50 border border-zinc-100 rounded-lg text-xs">
-              <div className="space-y-0.5">
-                <span className="font-bold text-zinc-700">DKIM (DomainKeys Identified Mail)</span>
-                <p className="text-[10px] text-zinc-400 font-mono">resend._domainkey.cylawtech.com</p>
+              <div className="space-y-0.5 min-w-0 pr-2">
+                <span className="font-bold text-zinc-750 block truncate">DKIM (DomainKeys Identified Mail)</span>
+                <p className="text-[10px] text-zinc-400 font-mono truncate">resend._domainkey.cylawtech.com</p>
               </div>
               {dnsResults?.dkimStatus ? (
-                <span className="flex items-center gap-1 text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-100">
+                <span className="flex items-center gap-1 text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-100 shrink-0">
                   <Check className="w-3 h-3" /> VERIFIED
                 </span>
               ) : (
-                <span className="flex items-center gap-1 text-[10px] font-bold text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-100">
-                  <AlertTriangle className="w-3 h-3" /> UNCONFIGURED
+                <span className="flex items-center gap-1 text-[10px] font-bold text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-100 shrink-0">
+                  <AlertCircle className="w-3 h-3" /> UNCONFIGURED
                 </span>
               )}
             </div>
 
             {/* DMARC Check */}
             <div className="flex items-center justify-between p-3 bg-zinc-50 border border-zinc-100 rounded-lg text-xs">
-              <div className="space-y-0.5">
-                <span className="font-bold text-zinc-700">DMARC policy (Domain Message Authentication)</span>
-                <p className="text-[10px] text-zinc-400 font-mono">_dmarc.cylawtech.com = v=DMARC1; p=none</p>
+              <div className="space-y-0.5 min-w-0 pr-2">
+                <span className="font-bold text-zinc-750 block truncate">DMARC policy (Domain Message Authentication)</span>
+                <p className="text-[10px] text-zinc-400 font-mono truncate">_dmarc.cylawtech.com = v=DMARC1; p=none</p>
               </div>
               {dnsResults?.dmarcStatus ? (
-                <span className="flex items-center gap-1 text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-100">
+                <span className="flex items-center gap-1 text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-100 shrink-0">
                   <Check className="w-3 h-3" /> VERIFIED
                 </span>
               ) : (
-                <span className="flex items-center gap-1 text-[10px] font-bold text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-100">
-                  <AlertTriangle className="w-3 h-3" /> UNCONFIGURED
+                <span className="flex items-center gap-1 text-[10px] font-bold text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-100 shrink-0">
+                  <AlertCircle className="w-3 h-3" /> UNCONFIGURED
                 </span>
               )}
             </div>
           </div>
 
-          <p className="text-[10px] text-zinc-400 select-all leading-normal bg-zinc-50/50 p-2.5 rounded-md border border-zinc-100/60 font-mono">
+          <p className="text-[10px] text-zinc-400 leading-normal bg-zinc-50/50 p-2.5 rounded-md border border-zinc-100/60 font-mono">
             SPF, DKIM, and DMARC prevent attackers from spoofing your brand name, adhering to Gmail and Yahoo sender guidelines.
           </p>
         </div>
@@ -1063,9 +1534,9 @@ function EmailHealthTab({ logs, onRefreshSim, subscribers }: EmailHealthTabProps
                   <select
                     onChange={(e) => setSimEmail(e.target.value)}
                     value={simEmail}
-                    className="text-xs bg-zinc-100 border border-zinc-200 py-1.5 px-2 rounded-lg text-zinc-700 animate-none cursor-pointer"
+                    className="text-xs bg-zinc-100 border border-zinc-200 py-1.5 px-2 rounded-lg text-zinc-700 animate-none cursor-pointer focus:ring-1 focus:ring-indigo-500 outline-none"
                   >
-                    <option value="">Select Subscriber...</option>
+                    <option value="">Choose Existing Lead...</option>
                     {subscribers.map((sub) => (
                       <option key={sub.id} value={sub.email}>
                         {sub.email}
@@ -1101,13 +1572,13 @@ function EmailHealthTab({ logs, onRefreshSim, subscribers }: EmailHealthTabProps
             <button
               onClick={handleSimulateWebhook}
               disabled={simulating}
-              className="w-full py-2.5 bg-indigo-600 text-white rounded-lg text-xs font-bold shadow-xs hover:bg-indigo-700 transition-all cursor-pointer flex items-center justify-center gap-1.5"
+              className="w-full py-2.5 bg-zinc-900 text-white rounded-lg text-xs font-bold shadow-xs hover:bg-zinc-850 transition-all cursor-pointer flex items-center justify-center gap-1.5"
             >
               {simulating ? 'Processing webhook trigger...' : 'Trigger Webhook Callback'}
             </button>
 
             {simResult && (
-              <div className={`p-2.5 rounded-lg text-xs font-medium ${simResult.ok ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' : 'bg-rose-50 text-rose-700 border border-rose-100'}`}>
+              <div className={`p-2.5 rounded-lg text-xs font-medium ${simResult.ok ? 'bg-emerald-50 text-emerald-750 border border-emerald-100' : 'bg-rose-50 text-rose-750 border border-rose-100'}`}>
                 {simResult.msg}
               </div>
             )}
