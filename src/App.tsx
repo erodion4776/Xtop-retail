@@ -3,7 +3,6 @@ import { Menu, Mail, Bell, Activity, Sparkles, AlertCircle, HelpCircle, Loader2 
 import Sidebar from './components/Sidebar';
 import DashboardView from './components/DashboardView';
 import SubscribersView from './components/SubscribersView';
-import CampaignsView from './components/CampaignsView';
 import SettingsView from './components/SettingsView';
 import EmailCenter from './components/EmailCenter';
 
@@ -325,13 +324,6 @@ export default function App() {
                   subscribers={subscribers}
                   onAddSubscriber={handleAddSubscriber}
                   onDeleteSubscriber={handleDeleteSubscriber}
-                />
-              )}
-
-              {activeTab === 'campaigns' && (
-                <CampaignsView 
-                  campaigns={campaigns} 
-                  onCreateCampaign={handleCreateCampaign} 
                 />
               )}
 

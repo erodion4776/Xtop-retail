@@ -27,4 +27,4 @@ export interface RecentActivity {
   timestamp: string;
 }
 
-export type ActiveTab = 'dashboard' | 'subscribers' | 'campaigns' | 'settings' | 'email-center';
+export type ActiveTab = 'dashboard' | 'subscribers' | 'settings' | 'email-center';

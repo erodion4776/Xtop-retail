@@ -1,5 +1,5 @@
 import { SVGProps } from 'react';
-import { Users, Send, CheckCircle, TrendingUp, AlertCircle, ArrowUpRight, Play, ServerCrash, Sparkles } from 'lucide-react';
+import { Users, Send, CheckCircle, TrendingUp, AlertCircle, ArrowUpRight, Play, ServerCrash, Sparkles, Globe, Mail } from 'lucide-react';
 import { Subscriber, Campaign, RecentActivity, ActiveTab } from '../types';
 
 interface DashboardViewProps {
@@ -48,10 +48,10 @@ export default function DashboardView({
           </p>
           <div className="flex flex-wrap gap-3 mt-6">
             <button
-              onClick={() => setActiveTab('campaigns')}
+              onClick={() => setActiveTab('email-center')}
               className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 font-medium text-xs rounded-lg transition-colors shadow-xs active:scale-95 duration-150 inline-flex items-center gap-1.5"
             >
-              <PlusIcon className="w-3.5 h-3.5" /> Launch Campaign
+              <Mail className="w-3.5 h-3.5" /> Configure Email Center
             </button>
             <button
               onClick={() => setActiveTab('subscribers')}
@@ -84,20 +84,19 @@ export default function DashboardView({
           </div>
         </div>
 
-        {/* KPI: Total Campaigns */}
+        {/* KPI: Configured Websites */}
         <div className="bg-white border border-zinc-200 p-6 rounded-xl shadow-xs hover:shadow-md transition-shadow">
           <div className="flex justify-between items-start">
             <div className="space-y-1">
-              <p className="text-xs font-medium text-zinc-500 uppercase tracking-wider">Total Campaigns</p>
-              <h3 className="text-3xl font-extrabold text-zinc-900 leading-none">{totalCampaigns}</h3>
+              <p className="text-xs font-medium text-zinc-500 uppercase tracking-wider">Active Platforms</p>
+              <h3 className="text-3xl font-extrabold text-zinc-900 leading-none">3</h3>
             </div>
             <div className="w-12 h-12 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center">
-              <Send className="w-5 h-5 text-emerald-600" />
+              <Globe className="w-5 h-5 text-emerald-600" />
             </div>
           </div>
-          <div className="mt-4 pt-4 border-t border-zinc-100 flex items-center justify-between text-xs text-zinc-500">
-            <span className="font-semibold text-emerald-600">{sentCampaigns} delivered</span>
-            <span>{campaigns.filter(c => c.status === 'draft').length} drafts saved</span>
+          <div className="mt-4 pt-4 border-t border-zinc-100 flex items-center justify-between text-[11px] text-zinc-500">
+            <span className="font-bold text-zinc-650">cyvisahelp • cylawtech • cybarprep</span>
           </div>
         </div>
 

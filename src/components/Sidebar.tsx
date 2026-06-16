@@ -1,4 +1,4 @@
-import { LayoutDashboard, Users, Send, Settings, Mail, X } from 'lucide-react';
+import { LayoutDashboard, Users, Settings, Mail, X } from 'lucide-react';
 import { ActiveTab } from '../types';
 
 interface SidebarProps {
@@ -12,7 +12,6 @@ export default function Sidebar({ activeTab, setActiveTab, isOpen, setIsOpen }: 
   const menuItems = [
     { id: 'dashboard' as ActiveTab, label: 'Dashboard', icon: LayoutDashboard },
     { id: 'subscribers' as ActiveTab, label: 'Subscribers', icon: Users },
-    { id: 'campaigns' as ActiveTab, label: 'Campaigns', icon: Send },
     { id: 'email-center' as ActiveTab, label: 'Email Center', icon: Mail },
     { id: 'settings' as ActiveTab, label: 'Settings', icon: Settings },
   ];
