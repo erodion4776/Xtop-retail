@@ -124,7 +124,7 @@ const SITE_DEFAULTS: Record<string, { subject: string; body: string }> = {
   }
 };
 
-type ActiveTab = 'health' | 'send' | 'welcome' | 'subscribers' | 'logs' | 'integration' | 'test' | 'debug';
+type ActiveTab = 'health' | 'send' | 'welcome' | 'subscribers' | 'import' | 'logs' | 'integration' | 'test' | 'debug';
 
 export default function EmailCenter() {
   const [activeTab, setActiveTab] = useState<ActiveTab>('health');
@@ -583,6 +583,7 @@ export default function EmailCenter() {
     { id: 'send', label: 'Send Newsletters', icon: Send },
     { id: 'welcome', label: 'Welcome Mail Automation', icon: Mail },
     { id: 'subscribers', label: `Lead Manager (${subscribers.length})`, icon: Users },
+    { id: 'import', label: 'Import Contacts (CSV/PDF)', icon: Upload },
     { id: 'logs', label: 'Delivery logs', icon: History },
     { id: 'integration', label: 'Embedded Form Widget', icon: Building2 },
     { id: 'test', label: 'Direct Send API', icon: ShieldCheck },
@@ -1221,17 +1222,19 @@ export default function EmailCenter() {
 
                   {!isPasteMode ? (
                     <div className="space-y-2">
-                      <label className="flex flex-col items-center justify-center border-2 border-dashed border-zinc-350 hover:border-indigo-500 rounded-lg py-5 px-3 bg-white cursor-pointer hover:bg-zinc-50/50 transition-all text-center">
-                        <Upload className="w-6 h-6 text-zinc-400 mb-1" />
+                      <div className="flex flex-col items-center justify-center border-2 border-dashed border-zinc-200 hover:border-indigo-500 rounded-xl py-4 px-3 bg-white text-center">
+                        <Upload className="w-5 h-5 text-zinc-400 mb-1" />
                         <span className="text-xs font-bold text-zinc-700">Choose Mailchimp Export File</span>
                         <span className="text-[9px] text-zinc-400 mt-0.5">Supports .csv, .txt, .pdf</span>
-                        <input
-                          type="file"
-                          accept=".csv,.txt,.pdf"
-                          onChange={handleFileChange}
-                          className="hidden"
-                        />
-                      </label>
+                        <div className="mt-2.5 w-full">
+                          <input
+                            type="file"
+                            accept=".csv,.txt,.pdf"
+                            onChange={handleFileChange}
+                            className="w-full text-[11px] text-zinc-500 cursor-pointer file:cursor-pointer file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-[10px] file:font-bold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-105 bg-zinc-50 p-1 border border-zinc-200 rounded"
+                          />
+                        </div>
+                      </div>
 
                       {importFile && (
                         <div className="flex items-center gap-2 p-2 bg-zinc-100 rounded border border-zinc-200/60 text-xs text-zinc-700 font-medium">
@@ -1352,6 +1355,251 @@ export default function EmailCenter() {
                       </button>
                     </div>
                   )}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* DETAILED MAILCHIMP / PDF BULK IMPORT WORKSPACE TAB */}
+      {activeTab === 'import' && (
+        <div className="bg-white border border-zinc-200 rounded-xl p-6 shadow-xs space-y-6">
+          <div className="flex flex-col md:flex-row md:items-center justify-between border-b border-zinc-100 pb-4 gap-3">
+            <div>
+              <h3 className="font-bold text-base text-zinc-900">Mailchimp & PDF Subscriber Bulk Importer</h3>
+              <p className="text-xs text-zinc-500 mt-0.5">
+                Bulk upload, test, and register lead contact pools directly into specific website brands.
+              </p>
+            </div>
+            <div className="flex gap-2">
+              <span className="text-[10px] bg-indigo-50 text-indigo-700 font-bold px-2.5 py-1 rounded-md border border-indigo-100 inline-flex items-center gap-1">
+                <Upload className="w-3.5 h-3.5 animate-bounce" /> Auto-Parser Active
+              </span>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="space-y-4">
+              <div>
+                <h4 className="text-xs font-extrabold text-zinc-700 uppercase tracking-widest">Step 1: Segment Brand</h4>
+                <p className="text-[11px] text-zinc-500 mt-1 leading-relaxed">
+                  Select which website property the imported subscribers belong to.
+                </p>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-[10px] uppercase font-extrabold text-zinc-500 block">Target website property / brand</label>
+                <select
+                  value={importSiteKey}
+                  onChange={(e) => setImportSiteKey(e.target.value)}
+                  className="w-full text-xs py-2.5 px-3 bg-zinc-50 border border-zinc-200 rounded-xl outline-none cursor-pointer focus:ring-1 focus:ring-indigo-500 text-zinc-800 font-bold"
+                >
+                  {siteConfigs.map(s => (
+                    <option key={s.siteKey} value={s.siteKey}>{s.brandName} ({s.siteKey}.com)</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="space-y-2 pt-4 border-t border-zinc-100">
+                <label className="text-[10px] uppercase font-extrabold text-zinc-500 block">Choose Upload Format</label>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsPasteMode(false);
+                      setParsedContacts([]);
+                      setImportFile(null);
+                      setParsingError(null);
+                    }}
+                    className={`flex-1 py-2 text-center text-xs font-bold rounded-lg border transition-all cursor-pointer ${
+                      !isPasteMode
+                        ? 'bg-zinc-950 border-zinc-950 text-white shadow-2xs'
+                        : 'bg-white border-zinc-200 text-zinc-600 hover:bg-zinc-50'
+                    }`}
+                  >
+                    CSV/Export File
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsPasteMode(true);
+                      setParsedContacts([]);
+                      setImportFile(null);
+                      setParsingError(null);
+                    }}
+                    className={`flex-1 py-2 text-center text-xs font-bold rounded-lg border transition-all cursor-pointer ${
+                      isPasteMode
+                        ? 'bg-zinc-955 border-zinc-955 text-white shadow-2xs'
+                        : 'bg-white border-zinc-200 text-zinc-650 hover:bg-zinc-50'
+                    }`}
+                  >
+                    Direct Text Paste
+                  </button>
+                </div>
+              </div>
+
+              <div className="bg-zinc-50 rounded-xl p-4 border border-zinc-200 text-[11px] text-zinc-600 space-y-2.5 leading-relaxed shadow-3xs">
+                <p className="font-extrabold text-zinc-800 flex items-center gap-1.5 border-b border-zinc-250 pb-1">
+                  <HelpCircle className="w-4 h-4 text-indigo-500" /> Format Requirements
+                </p>
+                <ul className="list-disc list-inside space-y-1 text-zinc-500">
+                  <li><strong>Mailchimp/CRM exports:</strong> Accepts files ending in `.csv` or `.txt`.</li>
+                  <li><strong>PDF files:</strong> Accepts PDF sheets, catalogs or text arrays. We automatically detect and pull matching email formulas.</li>
+                  <li><strong>Automatic Filters:</strong> Rest assured, duplicate addresses in the file are filtered out instantly to avoid duplicates.</li>
+                </ul>
+              </div>
+            </div>
+
+            <div className="lg:col-span-2 space-y-4">
+              <div>
+                <h4 className="text-xs font-extrabold text-zinc-700 uppercase tracking-widest">Step 2: File Selector</h4>
+                <p className="text-[11px] text-zinc-500 mt-1">
+                  Upload your file. The system will process lines automatically on selection.
+                </p>
+              </div>
+
+              {!isPasteMode ? (
+                <div className="space-y-3">
+                  <div className="flex flex-col items-center justify-center border-2 border-dashed border-zinc-250 hover:border-indigo-500 rounded-xl py-8 px-4 bg-zinc-50/40 hover:bg-zinc-50/80 transition-all text-center">
+                    <Upload className="w-8 h-8 text-indigo-500 mb-2 animate-bounce" />
+                    <span className="text-xs font-bold text-zinc-800">Select Export PDF, CSV or TXT File</span>
+                    <span className="text-[10px] text-zinc-400 mt-1 max-w-sm leading-relaxed">
+                      Accepts standard exported lists (.csv), standard tab-delimited exports (.txt), and PDF roster sheets (.pdf).
+                    </span>
+
+                    {/* Standard visible styled input is 100% reliable and unmistakable */}
+                    <div className="mt-4 w-full max-w-sm bg-white border border-zinc-200 hover:border-zinc-350 p-2 rounded-xl transition-all shadow-3xs">
+                      <input
+                        type="file"
+                        accept=".csv,.txt,.pdf"
+                        onChange={handleFileChange}
+                        className="w-full text-xs text-zinc-600 cursor-pointer file:cursor-pointer file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-[10px] file:font-bold file:bg-indigo-600 file:text-white hover:file:bg-indigo-700"
+                        id="primary-file-uploader-workspace"
+                      />
+                    </div>
+                  </div>
+
+                  {importFile && (
+                    <div className="flex items-center gap-2 p-3 bg-indigo-50/40 rounded-xl border border-indigo-100 text-xs text-indigo-900 font-medium animate-fade-in">
+                      <FileText className="w-5 h-5 text-indigo-600 shrink-0" />
+                      <span className="truncate flex-1 font-bold">{importFile.name} ({(importFile.size / 1024).toFixed(1)} KB)</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setImportFile(null);
+                          setParsedContacts([]);
+                          setParsingError(null);
+                          setImportStats(null);
+                        }}
+                        className="text-rose-600 font-extrabold hover:text-rose-800 cursor-pointer px-2 text-sm"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <textarea
+                    rows={6}
+                    placeholder="Paste email records or comma/space-separated data...&#10;e.g.&#10;johndoe@cyvisahelp.com&#10;jane@cylawtech.com, Jane Smith"
+                    value={pasteText}
+                    onChange={(e) => setPasteText(e.target.value)}
+                    className="w-full text-xs p-3 bg-zinc-50 border border-zinc-200 rounded-xl font-mono focus:ring-1 focus:ring-indigo-500 overflow-y-auto"
+                  />
+                  <button
+                    type="button"
+                    onClick={handlePasteParse}
+                    className="w-full py-2 bg-zinc-900 hover:bg-zinc-800 border-zinc-950 text-white text-xs font-bold rounded-lg cursor-pointer flex items-center justify-center gap-1.5"
+                  >
+                    <Search className="w-3.5 h-3.5" /> Parse Email Records
+                  </button>
+                </div>
+              )}
+
+              {parsingError && (
+                <div className="p-3 bg-rose-50 border border-rose-100 rounded-xl text-xs text-rose-700 font-bold flex items-start gap-2 animate-fade-in">
+                  <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                  <span>{parsingError}</span>
+                </div>
+              )}
+
+              {importStats && (
+                <div className="p-4 bg-emerald-50 border border-emerald-100 rounded-xl text-xs text-emerald-800 space-y-2 animate-fade-in">
+                  <p className="font-extrabold flex items-center gap-1.5 text-emerald-900 border-b border-emerald-100 pb-1.5 text-xs">
+                    <CheckCircle2 className="w-5 h-5 text-emerald-600" />
+                    Lead Contacts Successfully Imported!
+                  </p>
+                  <p className="text-[11px] text-zinc-500 leading-normal pb-1">
+                    Your database list was validated, filtered, and synchronized with Supabase database assets.
+                  </p>
+                  <div className="grid grid-cols-3 gap-2 text-[11px] font-bold text-center pt-1.5">
+                    <div className="bg-emerald-100/50 p-2 rounded-xl border border-emerald-250/30">
+                      <p className="text-emerald-950 font-black text-sm">{importStats.imported}</p>
+                      <p className="text-zinc-650 text-[10px]">Added</p>
+                    </div>
+                    <div className="bg-amber-100 p-2 rounded-xl border border-amber-200/35">
+                      <p className="text-amber-950 font-black text-sm">{importStats.duplicates}</p>
+                      <p className="text-zinc-650 text-[10px]">Skipped Duplicates</p>
+                    </div>
+                    <div className="bg-rose-100 p-2 rounded-xl border border-rose-200/35">
+                      <p className="text-rose-950 font-black text-sm">{importStats.invalid}</p>
+                      <p className="text-zinc-650 text-[10px]">Invalid Row</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {parsedContacts.length > 0 && (
+                <div className="space-y-3 animate-fade-in">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] text-indigo-700 font-extrabold bg-indigo-50 border border-indigo-100 px-3 py-1 rounded-full flex items-center gap-1.5">
+                      <Check className="w-3.5 h-3.5 text-indigo-600" /> {parsedContacts.length} Contacts Map Verification Completed
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setParsedContacts([])}
+                      className="text-xs text-rose-600 hover:underline font-bold"
+                    >
+                      Clear Rows
+                    </button>
+                  </div>
+
+                  <div className="border border-zinc-200 rounded-xl overflow-hidden divide-y divide-zinc-100 bg-white max-h-[220px] overflow-y-auto">
+                    {parsedContacts.map((c, i) => (
+                      <div key={i} className="p-3 flex justify-between items-center text-xs hover:bg-zinc-50 transition-all">
+                        <div className="truncate pr-3">
+                          <p className="font-extrabold text-zinc-900 truncate">{c.email}</p>
+                          <p className="text-[10px] text-zinc-500">Name alias: {c.name}</p>
+                        </div>
+                        <span className="text-[9px] bg-emerald-50 text-emerald-800 border border-emerald-150 px-2 py-0.5 rounded-full font-bold">
+                          Active Lead
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="pt-2">
+                    <button
+                      type="button"
+                      onClick={handleBulkImport}
+                      disabled={importing}
+                      className="w-full py-3.5 bg-indigo-600 hover:bg-indigo-700 border border-indigo-700 text-white text-xs font-black rounded-xl flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 shadow-md transition-all uppercase"
+                    >
+                      {importing ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          Importing and Syncing Data Pool...
+                        </>
+                      ) : (
+                        <>
+                          <Plus className="w-4 h-4" />
+                          Complete Subscriber Import ({parsedContacts.length} Contacts)
+                        </>
+                      )}
+                    </button>
+                  </div>
                 </div>
               )}
             </div>
