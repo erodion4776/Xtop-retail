@@ -137,7 +137,9 @@ export default function EmailCenter() {
   const [siteKey, setSiteKey] = useState(siteConfigs[0].siteKey);
   const [subject, setSubject] = useState('');
   const [message, setMessage] = useState('');
-  const [sendTo, setSendTo] = useState<'all' | 'single'>('all');
+  const [sendTo, setSendTo] = useState<'all' | 'single' | 'selected'>('all');
+  const [selectedSubscriberEmails, setSelectedSubscriberEmails] = useState<string[]>([]);
+  const [selectSearchQuery, setSelectSearchQuery] = useState('');
   const [singleEmail, setSingleEmail] = useState('');
   const [sending, setSending] = useState(false);
   const [sendResult, setSendResult] = useState<{ ok: boolean; msg: string } | null>(null);
@@ -513,6 +515,10 @@ export default function EmailCenter() {
       setSendResult({ ok: false, msg: 'Please enter a valid single recipient email.' });
       return;
     }
+    if (sendTo === 'selected' && selectedSubscriberEmails.length === 0) {
+      setSendResult({ ok: false, msg: 'Please select at least one contact from the list below.' });
+      return;
+    }
     setSending(true);
     setSendResult(null);
     try {
@@ -524,15 +530,18 @@ export default function EmailCenter() {
           subject,
           message,
           sendTo,
-          emails: sendTo === 'single' ? [singleEmail] : [],
+          emails: sendTo === 'single' 
+            ? [singleEmail] 
+            : (sendTo === 'selected' ? selectedSubscriberEmails : []),
         }),
       });
       const data = await res.json();
       if (res.ok) {
-        setSendResult({ ok: true, msg: `Campaign sent successfully to targeted users!` });
+        setSendResult({ ok: true, msg: `Campaign sent successfully to ${data.sent || 'targeted'} users!` });
         setSubject('');
         setMessage('');
         setSingleEmail('');
+        setSelectedSubscriberEmails([]);
         fetchData();
       } else {
         setSendResult({ ok: false, msg: data.error || 'Failed to dispatch email campaign.' });
@@ -814,22 +823,33 @@ export default function EmailCenter() {
 
               <div className="space-y-1">
                 <label className="text-xs font-bold text-zinc-700">Target Recipient Scope</label>
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2">
                   <button
                     type="button"
                     onClick={() => setSendTo('all')}
-                    className={`flex-1 py-2 text-xs font-semibold rounded-lg border transition-all cursor-pointer ${
+                    className={`flex-1 min-w-[120px] py-2 text-xs font-semibold rounded-lg border transition-all cursor-pointer ${
                       sendTo === 'all'
                         ? 'bg-zinc-900 text-white border-zinc-900'
                         : 'bg-white text-zinc-600 border-zinc-200 hover:bg-zinc-50'
                     }`}
                   >
-                    Site Subscribers ({subscribers.filter(s => (s.tenants?.site_key || 'cyvisahelp') === siteKey).length})
+                    All Subscribers ({subscribers.filter(s => (s.tenants?.site_key || 'cyvisahelp') === siteKey).length})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSendTo('selected')}
+                    className={`flex-1 min-w-[120px] py-2 text-xs font-semibold rounded-lg border transition-all cursor-pointer ${
+                      sendTo === 'selected'
+                        ? 'bg-zinc-900 text-white border-zinc-900'
+                        : 'bg-white text-zinc-600 border-zinc-200 hover:bg-zinc-50'
+                    }`}
+                  >
+                    Select Contacts ({selectedSubscriberEmails.length} Chosen)
                   </button>
                   <button
                     type="button"
                     onClick={() => setSendTo('single')}
-                    className={`flex-1 py-2 text-xs font-semibold rounded-lg border transition-all cursor-pointer ${
+                    className={`flex-1 min-w-[120px] py-2 text-xs font-semibold rounded-lg border transition-all cursor-pointer ${
                       sendTo === 'single'
                         ? 'bg-zinc-900 text-white border-zinc-900'
                         : 'bg-white text-zinc-600 border-zinc-200 hover:bg-zinc-50'
@@ -840,6 +860,84 @@ export default function EmailCenter() {
                 </div>
               </div>
             </div>
+
+            {sendTo === 'selected' && (
+              <div className="space-y-2 border border-zinc-200 bg-zinc-50 p-4 rounded-lg animate-fade-in">
+                <div className="flex justify-between items-center sm:flex-row flex-col gap-2">
+                  <div>
+                    <h5 className="text-xs font-bold text-zinc-800">Select Specific Contacts</h5>
+                    <p className="text-[10px] text-zinc-500">Checking a box adds the contact to targeted recipients.</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const brandEmails = subscribers
+                          .filter(s => (s.tenants?.site_key || 'cyvisahelp') === siteKey && s.status === 'active')
+                          .map(s => s.email);
+                        setSelectedSubscriberEmails(brandEmails);
+                      }}
+                      className="text-[10px] bg-white border border-zinc-200 text-zinc-700 hover:bg-zinc-50 px-2 py-1 rounded font-medium cursor-pointer"
+                    >
+                      Select All
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedSubscriberEmails([])}
+                      className="text-[10px] bg-white border border-zinc-200 text-zinc-700 hover:bg-zinc-50 px-2 py-1 rounded font-medium cursor-pointer"
+                    >
+                      Deselect All
+                    </button>
+                  </div>
+                </div>
+
+                <input
+                  type="text"
+                  placeholder="Search contacts on this brand..."
+                  value={selectSearchQuery}
+                  onChange={(e) => setSelectSearchQuery(e.target.value)}
+                  className="w-full text-xs py-1.5 px-2 bg-white border border-zinc-200 rounded-md text-zinc-800 placeholder-zinc-400 focus:outline-none"
+                />
+
+                <div className="max-h-48 overflow-y-auto border border-zinc-150 bg-white rounded-md divide-y divide-zinc-100">
+                  {subscribers
+                    .filter(s => (s.tenants?.site_key || 'cyvisahelp') === siteKey && s.status === 'active')
+                    .filter(s => !selectSearchQuery || s.email.toLowerCase().includes(selectSearchQuery.toLowerCase()) || (s.name || '').toLowerCase().includes(selectSearchQuery.toLowerCase()))
+                    .map(sub => {
+                      const isChecked = selectedSubscriberEmails.includes(sub.email);
+                      return (
+                        <label key={sub.id} className="flex items-center gap-3 px-3 py-2 cursor-pointer hover:bg-zinc-50 transition-colors">
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            onChange={() => {
+                              if (isChecked) {
+                                setSelectedSubscriberEmails(prev => prev.filter(e => e !== sub.email));
+                              } else {
+                                setSelectedSubscriberEmails(prev => [...prev, sub.email]);
+                              }
+                            }}
+                            className="rounded text-indigo-600 focus:ring-indigo-500 h-3.5 w-3.5 border-zinc-300"
+                          />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs font-semibold text-zinc-800 truncate">{sub.name || 'No Name'}</p>
+                            <p className="text-[10px] text-zinc-500 truncate font-mono">{sub.email}</p>
+                          </div>
+                        </label>
+                      );
+                    })}
+
+                  {subscribers.filter(s => (s.tenants?.site_key || 'cyvisahelp') === siteKey && s.status === 'active').length === 0 && (
+                    <div className="p-4 text-center text-xs text-zinc-400">
+                      No active subscribers registered for {siteConfigs.find(s => s.siteKey === siteKey)?.brandName} yet!
+                    </div>
+                  )}
+                </div>
+                <div className="text-[10px] text-zinc-500 font-bold">
+                  {selectedSubscriberEmails.length} contacts selected
+                </div>
+              </div>
+            )}
 
             {sendTo === 'single' && (
               <div className="space-y-1 animate-fade-in">
@@ -941,7 +1039,9 @@ export default function EmailCenter() {
                 <span className="text-zinc-900 font-bold bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">
                   {sendTo === 'all' 
                     ? subscribers.filter(s => (s.tenants?.site_key || 'cyvisahelp') === siteKey).length + " active subscriber(s)"
-                    : "1 single recipient"
+                    : sendTo === 'selected'
+                      ? selectedSubscriberEmails.length + " selected subscriber(s)"
+                      : "1 single recipient"
                   }
                 </span>
               </div>
