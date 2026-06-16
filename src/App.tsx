@@ -96,30 +96,52 @@ export default function App() {
 
   // 2. State mutation callbacks connected with API endpoints
   const handleAddSubscriber = async (newSub: Omit<Subscriber, 'id' | 'date_added'>) => {
-    if (!activeClient) return;
-
-    // Call backend API instead of direct Supabase insert
-    const response = await fetch('/api/subscribe', {
+    // Call backend API with the specifically selected brand site key
+    const response = await fetch('/api/subscribers', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: newSub.email, name: newSub.name, client_id: activeClient.id }),
+      body: JSON.stringify({ 
+        email: newSub.email, 
+        name: newSub.name, 
+        siteKey: newSub.client_id // siteKey parameter
+      }),
     });
 
     if (response.ok) {
-      const { subscriber } = await response.json();
-      setSubscribers((prev) => [subscriber, ...prev]);
+      const subscriber = await response.json();
+      
+      const brands: Record<string, string> = {
+        'cyvisahelp': 'CY Visa Help',
+        'cybarprep': 'CY Bar Prep',
+        'cylawtech': 'CY Law Tech'
+      };
+      
+      const mappedSub: Subscriber = {
+        id: subscriber.id,
+        email: subscriber.email,
+        name: subscriber.name || 'Subscriber',
+        status: subscriber.status || 'active',
+        site_name: brands[newSub.client_id || ''] || 'CY Visa Help',
+        client_id: subscriber.tenant_id,
+        date_added: subscriber.created_at 
+          ? new Date(subscriber.created_at).toISOString().replace('T', ' ').slice(0, 16) 
+          : new Date().toISOString().replace('T', ' ').slice(0, 16)
+      };
+
+      setSubscribers((prev) => [mappedSub, ...prev]);
 
       // Push activity logger
       const activityObj: RecentActivity = {
         id: `act_${Date.now()}`,
         type: 'subscriber_join',
         title: 'New subscriber joined',
-        detail: `${subscriber.email} joined as Client ${subscriber.client_id}`,
+        detail: `${mappedSub.email} joined ${mappedSub.site_name}`,
         timestamp: 'Just now',
       };
       setActivities((prev) => [activityObj, ...prev]);
     } else {
-      alert('Could not subscribe user via backend.');
+      const errData = await response.json().catch(() => ({}));
+      alert(errData.error || 'Could not subscribe user via backend.');
     }
   };
 

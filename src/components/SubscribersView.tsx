@@ -20,15 +20,9 @@ export default function SubscribersView({
   // Form fields
   const [newEmail, setNewEmail] = useState('');
   const [newName, setNewName] = useState(''); // Added
-  const [newClientId, setNewClientId] = useState('');
+  const [newClientId, setNewClientId] = useState('cyvisahelp');
   const [newStatus, setNewStatus] = useState<'active' | 'unsubscribed' | 'pending'>('active');
   const [formError, setFormError] = useState('');
-
-  // Auto generate client ID if requested
-  const handleGenerateClientId = () => {
-    const randomId = 'cl_' + Math.floor(1000 + Math.random() * 9000);
-    setNewClientId(randomId);
-  };
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
@@ -40,7 +34,7 @@ export default function SubscribersView({
     }
 
     if (!newClientId.trim()) {
-      setFormError('Please supply or generate a Client ID');
+      setFormError('Please select a Brand Property');
       return;
     }
 
@@ -55,7 +49,7 @@ export default function SubscribersView({
     // Reset view
     setNewEmail('');
     setNewName(''); // Added
-    setNewClientId('');
+    setNewClientId('cyvisahelp');
     setNewStatus('active');
     setIsAdding(false);
   };
@@ -128,26 +122,17 @@ export default function SubscribersView({
             </div>
 
             <div className="space-y-1">
-              <label className="text-xs font-semibold text-zinc-600">Client ID <span className="text-rose-500">*</span></label>
-              <div className="relative flex">
-                <input
-                  id="subscriber-client-id-input"
-                  type="text"
-                  placeholder="e.g., cl_4231"
-                  value={newClientId}
-                  onChange={(e) => setNewClientId(e.target.value)}
-                  className="w-full text-xs py-2.5 px-3 bg-white border border-zinc-200 rounded-lg text-zinc-800 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 font-mono font-medium"
-                />
-                <button
-                  id="auto-generate-client-id"
-                  type="button"
-                  onClick={handleGenerateClientId}
-                  title="Auto generate Client ID"
-                  className="absolute right-2 top-2 p-1 text-zinc-400 hover:text-indigo-600 hover:bg-zinc-150 rounded"
-                >
-                  <RefreshCw className="w-3.5 h-3.5" />
-                </button>
-              </div>
+              <label className="text-xs font-semibold text-zinc-600">Brand Property <span className="text-rose-500">*</span></label>
+              <select
+                id="subscriber-brand-select"
+                value={newClientId}
+                onChange={(e) => setNewClientId(e.target.value)}
+                className="w-full text-xs py-2.5 px-3 bg-white border border-zinc-200 rounded-lg text-zinc-800 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 font-medium cursor-pointer"
+              >
+                <option value="cyvisahelp">CY Visa Help</option>
+                <option value="cybarprep">CY Bar Prep</option>
+                <option value="cylawtech">CY Law Tech</option>
+              </select>
             </div>
 
             <div className="space-y-1">

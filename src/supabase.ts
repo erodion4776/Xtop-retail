@@ -124,18 +124,17 @@ export async function updateClientSender(clientId: string, newEmail: string, new
  * 2. SUBSCRIBERS DB INTERACTION
  * Fetch, Filter, Create and Delete subscribers.
  */
-export async function fetchSubscribersFromDB(tenantId: string): Promise<Subscriber[]> {
-  console.log('Fetching subscribers for tenantId:', tenantId);
+export async function fetchSubscribersFromDB(tenantId?: string): Promise<Subscriber[]> {
+  console.log('Fetching all subscribers from DB...');
   if (!SUPABASE_CONFIGURED || !supabase) {
     const fallbackList: Subscriber[] = getLocalData<Subscriber[]>('subscribers', []);
-    return fallbackList.filter(s => s.client_id === tenantId); // Keep client_id in UI layer for compatibility if needed
+    return fallbackList; // Return all so they all reflect on the Dashboard & Subscribers page!
   }
 
   try {
     const { data, error } = await supabase
       .from('subscribers')
-      .select('*, tenants(brand_name)')
-      .eq('tenant_id', tenantId);
+      .select('*, tenants(brand_name)');
 
     console.log('Fetch result:', { data, error });
     if (error) {
@@ -238,7 +237,7 @@ export async function deleteSubscriberFromDB(id: string): Promise<boolean> {
  * 3. CAMPAIGNS DB INTERACTION
  * Fetch campaigns and create campaigns.
  */
-export async function fetchCampaignsFromDB(tenantId: string): Promise<Campaign[]> {
+export async function fetchCampaignsFromDB(tenantId?: string): Promise<Campaign[]> {
   if (!SUPABASE_CONFIGURED || !supabase) {
     const fallbackList = getLocalData<Campaign[]>('campaigns', []);
     return fallbackList;
@@ -248,7 +247,6 @@ export async function fetchCampaignsFromDB(tenantId: string): Promise<Campaign[]
     const { data, error } = await supabase
       .from('campaigns')
       .select('*')
-      .eq('tenant_id', tenantId)
       .order('created_at', { ascending: false });
 
     if (error) {
