@@ -281,6 +281,104 @@ async function startServer() {
     }
   });
 
+  // POST /api/subscribers/bulk
+  app.post("/api/subscribers/bulk", async (req: any, res: any) => {
+    const { subscribers: list, siteKey } = req.body;
+    const key = siteKey || "cyvisahelp";
+
+    if (!Array.isArray(list) || list.length === 0) {
+        return res.status(400).json({ error: "A non-empty list of subscribers is required." });
+    }
+
+    try {
+        // 1. Resolve tenant
+        let { data: tenant } = await supabaseAdmin.from('tenants').select('id, brand_name').eq('site_key', key).single();
+        
+        if (!tenant) {
+            // Self-seed tenant if mismatch occurs
+            const config = siteConfigs.find(s => s.siteKey === key);
+            if (config) {
+                const { data: newTenant, error: insertErr } = await supabaseAdmin.from('tenants').insert({
+                    site_key: config.siteKey,
+                    brand_name: config.brandName,
+                    sender_name: config.senderName,
+                    primary_color: config.primaryColor,
+                    logo_url: config.logo
+                }).select().single();
+                
+                if (!insertErr && newTenant) {
+                    tenant = { id: newTenant.id, brand_name: newTenant.brand_name };
+                }
+            }
+        }
+
+        if (!tenant) {
+            return res.status(404).json({ error: `Tenant brand for "${key}" not configured.` });
+        }
+
+        // 2. Fetch existing subscribers of this tenant in one query to prevent duplication in bulk
+        const { data: preExisting } = await supabaseAdmin
+            .from('subscribers')
+            .select('email')
+            .eq('tenant_id', tenant.id);
+        
+        const existingEmails = new Set((preExisting || []).map((s: any) => s.email.toLowerCase().trim()));
+
+        // 3. Filter list & prepare for insert
+        const toInsert: any[] = [];
+        let duplicatesCount = 0;
+        let invalidCount = 0;
+
+        for (const item of list) {
+            const email = (item.email || '').trim().toLowerCase();
+            const name = (item.name || '').trim() || 'Subscriber';
+
+            if (!email || !email.includes('@')) {
+                invalidCount++;
+                continue;
+            }
+
+            if (existingEmails.has(email)) {
+                duplicatesCount++;
+                continue;
+            }
+
+            toInsert.push({
+                email,
+                name: name || 'Subscriber',
+                tenant_id: tenant.id,
+                status: 'active'
+            });
+            // Keep track in memory as well for fast duplicates matching in the same parsed batch
+            existingEmails.add(email);
+        }
+
+        let insertedCount = 0;
+        if (toInsert.length > 0) {
+            const { data, error: insertErr } = await supabaseAdmin
+                .from('subscribers')
+                .insert(toInsert)
+                .select('*');
+
+            if (insertErr) throw insertErr;
+            insertedCount = data?.length || toInsert.length;
+        }
+
+        addDebugLog('INFO', `Bulk imported ${insertedCount} leads into tenant ${tenant.brand_name} (${duplicatesCount} duplicates skipped, ${invalidCount} invalid rows skipped)`);
+
+        res.json({
+            success: true,
+            imported: insertedCount,
+            duplicates: duplicatesCount,
+            invalid: invalidCount,
+            totalProcessed: list.length
+        });
+    } catch (err: any) {
+        addDebugLog('ERROR', `Bulk import failure: ${err.message}`);
+        res.status(500).json({ error: err.message });
+    }
+  });
+
   // POST /api/send-campaign
   app.post("/api/send-campaign", async (req: any, res: any) => {
       const { siteKey, subject, message, sendTo, emails } = req.body;

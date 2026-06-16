@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { Mail, Users, History, Send, Loader2, Plus, AlertCircle, CheckCircle2, ToggleLeft, ToggleRight, Building2, Activity, Check, Search, Filter, RotateCcw, ShieldCheck, HelpCircle } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Mail, Users, History, Send, Loader2, Plus, AlertCircle, CheckCircle2, ToggleLeft, ToggleRight, Building2, Activity, Check, Search, Filter, RotateCcw, ShieldCheck, HelpCircle, Upload, FileText } from 'lucide-react';
 import { siteConfigs } from '../../server/emailConfig';
 
 interface Subscriber {
@@ -164,6 +164,240 @@ export default function EmailCenter() {
   const [newName, setNewName] = useState('');
   const [addSiteKey, setAddSiteKey] = useState(siteConfigs[0].siteKey);
   const [addingSubscriber, setAddingSubscriber] = useState(false);
+
+  // New Client-Side Parser States & Functions for Mailchimp Exports (CSV/PDF)
+  const [sidebarMode, setSidebarMode] = useState<'manual' | 'import'>('manual');
+  const [importSiteKey, setImportSiteKey] = useState(siteConfigs[0].siteKey);
+  const [importFile, setImportFile] = useState<File | null>(null);
+  const [parsedContacts, setParsedContacts] = useState<{ email: string; name: string; status: 'valid' | 'invalid' }[]>([]);
+  const [importing, setImporting] = useState(false);
+  const [importStats, setImportStats] = useState<{ imported: number; duplicates: number; invalid: number } | null>(null);
+  const [pasteText, setPasteText] = useState('');
+  const [isPasteMode, setIsPasteMode] = useState(false);
+  const [parsingError, setParsingError] = useState<string | null>(null);
+
+  const processFile = (file: File) => {
+    setImportFile(file);
+    setParsingError(null);
+    setImportStats(null);
+    const reader = new FileReader();
+
+    if (file.name.toLowerCase().endsWith('.pdf')) {
+      reader.onload = (e) => {
+        try {
+          const result = e.target?.result;
+          let text = '';
+          if (result instanceof ArrayBuffer) {
+             const dec = new TextDecoder('utf-8');
+             text = dec.decode(result);
+          } else {
+             text = result as string;
+          }
+          
+          const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
+          const foundEmails = text.match(emailRegex) || [];
+          
+          if (foundEmails.length === 0) {
+            setParsingError("No clear email addresses parsed from this PDF file. Please copy-paste the text instead.");
+            setParsedContacts([]);
+            return;
+          }
+
+          const uniqueEmails = Array.from(new Set(foundEmails.map(email => email.toLowerCase().trim()))) as string[];
+          const contacts = uniqueEmails.map(email => {
+             const username = email.split('@')[0];
+             const cleanName = username.charAt(0).toUpperCase() + username.slice(1);
+             return {
+               email,
+               name: cleanName,
+               status: 'valid' as const
+             };
+          });
+
+          setParsedContacts(contacts);
+        } catch (err: any) {
+          setParsingError("Parse error: " + err.message);
+          setParsedContacts([]);
+        }
+      };
+      reader.readAsArrayBuffer(file);
+    } else {
+      reader.onload = (e) => {
+        try {
+          const text = e.target?.result as string;
+          const lines = text.split(/\r?\n/).map(line => line.trim()).filter(line => line.length > 0);
+          
+          if (lines.length === 0) {
+            setParsingError("Selected file is empty.");
+            setParsedContacts([]);
+            return;
+          }
+
+          const hasComma = lines[0].includes(',');
+          const hasSemicolon = lines[0].includes(';');
+          const separator = hasSemicolon && !hasComma ? ';' : ',';
+
+          const parseCSVLine = (line: string) => {
+            const result = [];
+            let current = '';
+            let inQuotes = false;
+            for (let i = 0; i < line.length; i++) {
+              const char = line[i];
+              if (char === '"' || char === "'") {
+                inQuotes = !inQuotes;
+              } else if (char === separator && !inQuotes) {
+                result.push(current.trim());
+                current = '';
+              } else {
+                current += char;
+              }
+            }
+            result.push(current.trim());
+            return result;
+          };
+
+          const rawHeaders = parseCSVLine(lines[0]);
+          const headers = rawHeaders.map(h => h.replace(/^["']|["']$/g, '').toLowerCase().trim());
+
+          const emailIdx = headers.findIndex(h => h.includes('email') || h.includes('addr') || h === 'mail' || h === 'e-mail');
+          const firstNameIdx = headers.findIndex(h => h.includes('first name') || h === 'fname' || h === 'first_name' || h.includes('first'));
+          const lastNameIdx = headers.findIndex(h => h.includes('last name') || h === 'lname' || h === 'last_name' || h.includes('last'));
+          const nameIdx = headers.findIndex(h => h.includes('name') && !h.includes('first') && !h.includes('last'));
+
+          const contacts: { email: string; name: string; status: 'valid' | 'invalid' }[] = [];
+
+          if (emailIdx === -1) {
+            const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/;
+            for (const line of lines) {
+              const match = line.match(emailRegex);
+              if (match) {
+                const email = match[0].trim().toLowerCase();
+                const cleanName = email.split('@')[0];
+                contacts.push({
+                  email,
+                  name: cleanName.charAt(0).toUpperCase() + cleanName.slice(1),
+                  status: 'valid'
+                });
+              }
+            }
+          } else {
+            for (let i = 1; i < lines.length; i++) {
+              const columns = parseCSVLine(lines[i]);
+              if (columns.length === 0) continue;
+
+              const rawEmail = columns[emailIdx] || '';
+              const email = rawEmail.replace(/^["']|["']$/g, '').trim().toLowerCase();
+
+              if (!email || !email.includes('@')) {
+                continue;
+              }
+
+              let contactName = 'Subscriber';
+              if (firstNameIdx !== -1) {
+                const fName = (columns[firstNameIdx] || '').replace(/^["']|["']$/g, '').trim();
+                const lName = lastNameIdx !== -1 ? (columns[lastNameIdx] || '').replace(/^["']|["']$/g, '').trim() : '';
+                contactName = `${fName} ${lName}`.trim() || 'Subscriber';
+              } else if (nameIdx !== -1) {
+                contactName = (columns[nameIdx] || '').replace(/^["']|["']$/g, '').trim() || 'Subscriber';
+              } else {
+                const prefixName = email.split('@')[0];
+                contactName = prefixName.charAt(0).toUpperCase() + prefixName.slice(1);
+              }
+
+              contacts.push({
+                email,
+                name: contactName,
+                status: 'valid'
+              });
+            }
+          }
+
+          if (contacts.length === 0) {
+            setParsingError("No subscriber email columns parsed. Please paste raw text list instead.");
+          }
+          setParsedContacts(contacts);
+        } catch (err: any) {
+          setParsingError("Error parsing file format: " + err.message);
+          setParsedContacts([]);
+        }
+      };
+      reader.readAsText(file);
+    }
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      processFile(file);
+    }
+  };
+
+  const handlePasteParse = () => {
+    setParsingError(null);
+    setImportStats(null);
+    if (!pasteText.trim()) {
+      setParsingError("Please enter raw text info first.");
+      return;
+    }
+
+    const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
+    const foundEmails = pasteText.match(emailRegex) || [];
+
+    if (foundEmails.length === 0) {
+      setParsingError("Could not extract any valid email address patterns.");
+      setParsedContacts([]);
+      return;
+    }
+
+    const uniqueEmails = Array.from(new Set(foundEmails.map(e => e.toLowerCase().trim()))) as string[];
+    const contacts = uniqueEmails.map(email => {
+      const username = email.split('@')[0];
+      const cleanName = username.charAt(0).toUpperCase() + username.slice(1);
+      return {
+        email,
+        name: cleanName,
+        status: 'valid' as const
+      };
+    });
+
+    setParsedContacts(contacts);
+  };
+
+  const handleBulkImport = async () => {
+    if (parsedContacts.length === 0) return;
+    setImporting(true);
+    setImportStats(null);
+    try {
+      const res = await fetch('/api/subscribers/bulk', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          subscribers: parsedContacts,
+          siteKey: importSiteKey
+        })
+      });
+
+      if (res.ok) {
+        const stats = await res.json();
+        setImportStats({
+          imported: stats.imported,
+          duplicates: stats.duplicates,
+          invalid: stats.invalid
+        });
+        setParsedContacts([]);
+        setImportFile(null);
+        setPasteText('');
+        fetchData();
+      } else {
+        const data = await res.json();
+        alert(data.error || "Failed to complete bulk import.");
+      }
+    } catch (e: any) {
+      alert("Import failed: " + e.message);
+    } finally {
+      setImporting(false);
+    }
+  };
 
   const fetchData = async () => {
     try {
@@ -859,60 +1093,267 @@ export default function EmailCenter() {
               </div>
             </div>
 
-            {/* Quick register user form */}
+            {/* Dual Mode Subscriber Sidebar */}
             <div className="bg-zinc-50 border border-zinc-200 rounded-xl p-5 shadow-2xs h-fit space-y-4">
-              <div>
-                <h4 className="text-xs font-bold text-zinc-700 uppercase tracking-widest">Manual Sub-Registration</h4>
-                <p className="text-[11px] text-zinc-500 mt-1 leading-normal">
-                  Manually introduce leads signed up over phone or offline campaigns into specific tenants:
-                </p>
-              </div>
-
-              <div className="space-y-3.5">
-                <div className="space-y-1">
-                  <label className="text-[10px] uppercase font-extrabold text-zinc-500">Contact Email <span className="text-rose-500">*</span></label>
-                  <input
-                    type="email"
-                    placeholder="e.g. client@example.com"
-                    value={newEmail}
-                    onChange={(e) => setNewEmail(e.target.value)}
-                    className="w-full text-xs py-2 px-3 bg-white border border-zinc-200 rounded-lg outline-none focus:ring-1 focus:ring-indigo-500"
-                  />
-                </div>
-
-                <div className="space-y-1">
-                  <label className="text-[10px] uppercase font-extrabold text-zinc-500">Client Name</label>
-                  <input
-                    type="text"
-                    placeholder="e.g. Michael Scott"
-                    value={newName}
-                    onChange={(e) => setNewName(e.target.value)}
-                    className="w-full text-xs py-2 px-3 bg-white border border-zinc-200 rounded-lg outline-none focus:ring-1 focus:ring-indigo-500"
-                  />
-                </div>
-
-                <div className="space-y-1">
-                  <label className="text-[10px] uppercase font-extrabold text-zinc-500">Choose Website Property</label>
-                  <select
-                    value={addSiteKey}
-                    onChange={(e) => setAddSiteKey(e.target.value)}
-                    className="w-full text-xs py-2.5 px-2 bg-white border border-zinc-200 rounded-lg outline-none cursor-pointer focus:ring-1 focus:ring-indigo-500 text-zinc-750"
-                  >
-                    {siteConfigs.map(s => (
-                      <option key={s.siteKey} value={s.siteKey}>{s.brandName}</option>
-                    ))}
-                  </select>
-                </div>
-
+              <div className="flex border-b border-zinc-200 pb-1.5 gap-2">
                 <button
-                  onClick={handleAddSubscriber}
-                  disabled={addingSubscriber}
-                  className="w-full py-2.5 bg-zinc-900 border border-zinc-950 text-white text-xs font-bold rounded-lg flex items-center justify-center gap-1.5 hover:bg-zinc-800 cursor-pointer disabled:opacity-50"
+                  type="button"
+                  onClick={() => {
+                    setSidebarMode('manual');
+                    setParsingError(null);
+                    setImportStats(null);
+                  }}
+                  className={`flex-1 pb-2 text-center text-xs font-bold border-b-2 cursor-pointer transition-all ${
+                    sidebarMode === 'manual'
+                      ? 'border-indigo-600 text-indigo-600'
+                      : 'border-transparent text-zinc-400 hover:text-zinc-600'
+                  }`}
                 >
-                  {addingSubscriber ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-4 h-4" />}
-                  Register lead
+                  Manual Entry
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSidebarMode('import');
+                    setParsingError(null);
+                    setImportStats(null);
+                  }}
+                  className={`flex-1 pb-2 text-center text-xs font-bold border-b-2 cursor-pointer transition-all ${
+                    sidebarMode === 'import'
+                      ? 'border-indigo-600 text-indigo-600'
+                      : 'border-transparent text-zinc-400 hover:text-zinc-600'
+                  }`}
+                >
+                  Mailchimp Import
                 </button>
               </div>
+
+              {sidebarMode === 'manual' ? (
+                <div className="space-y-3.5 animate-fade-in">
+                  <div>
+                    <h4 className="text-xs font-bold text-zinc-700 uppercase tracking-widest">Manual Sub-Registration</h4>
+                    <p className="text-[10px] text-zinc-500 mt-0.5 leading-normal">
+                      Introduce leads manual campaigns into specific tenants:
+                    </p>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[10px] uppercase font-extrabold text-zinc-500">Contact Email <span className="text-rose-500">*</span></label>
+                    <input
+                      type="email"
+                      placeholder="e.g. client@example.com"
+                      value={newEmail}
+                      onChange={(e) => setNewEmail(e.target.value)}
+                      className="w-full text-xs py-2 px-3 bg-white border border-zinc-200 rounded-lg outline-none focus:ring-1 focus:ring-indigo-500"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[10px] uppercase font-extrabold text-zinc-500">Client Name</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. Michael Scott"
+                      value={newName}
+                      onChange={(e) => setNewName(e.target.value)}
+                      className="w-full text-xs py-2 px-3 bg-white border border-zinc-200 rounded-lg outline-none focus:ring-1 focus:ring-indigo-500"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[10px] uppercase font-extrabold text-zinc-500">Choose Website Property</label>
+                    <select
+                      value={addSiteKey}
+                      onChange={(e) => setAddSiteKey(e.target.value)}
+                      className="w-full text-xs py-2.5 px-2 bg-white border border-zinc-200 rounded-lg outline-none cursor-pointer focus:ring-1 focus:ring-indigo-500 text-zinc-750"
+                    >
+                      {siteConfigs.map(s => (
+                        <option key={s.siteKey} value={s.siteKey}>{s.brandName}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <button
+                    onClick={handleAddSubscriber}
+                    disabled={addingSubscriber}
+                    className="w-full py-2.5 bg-zinc-900 border border-zinc-950 text-white text-xs font-bold rounded-lg flex items-center justify-center gap-1.5 hover:bg-zinc-800 cursor-pointer disabled:opacity-50"
+                  >
+                    {addingSubscriber ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-4 h-4" />}
+                    Register lead
+                  </button>
+                </div>
+              ) : (
+                <div className="space-y-3.5 animate-fade-in">
+                  <div>
+                    <h4 className="text-xs font-bold text-zinc-700 uppercase tracking-widest">Mailchimp / CRM CRM Import</h4>
+                    <p className="text-[10px] text-zinc-500 mt-0.5 leading-normal">
+                      Supports direct exports from Mailchimp using <strong>CSV</strong>, <strong>TXT</strong> or <strong>PDF</strong> formats.
+                    </p>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[10px] uppercase font-extrabold text-zinc-500">Target Website Property</label>
+                    <select
+                      value={importSiteKey}
+                      onChange={(e) => setImportSiteKey(e.target.value)}
+                      className="w-full text-xs py-2 px-2 bg-white border border-zinc-200 rounded-lg outline-none cursor-pointer focus:ring-1 focus:ring-indigo-500 text-zinc-750 font-semibold"
+                    >
+                      {siteConfigs.map(s => (
+                        <option key={s.siteKey} value={s.siteKey}>{s.brandName} ({s.siteKey}.com)</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="flex items-center justify-between border-b border-dashed border-zinc-200 pb-1.5">
+                    <span className="text-[10px] uppercase font-extrabold text-zinc-500">Method Choice</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsPasteMode(!isPasteMode);
+                        setParsedContacts([]);
+                        setImportFile(null);
+                        setParsingError(null);
+                      }}
+                      className="text-[10px] font-bold text-indigo-600 hover:underline"
+                    >
+                      {isPasteMode ? 'Switch to File Upload' : 'Switch to Copy-Paste Text'}
+                    </button>
+                  </div>
+
+                  {!isPasteMode ? (
+                    <div className="space-y-2">
+                      <label className="flex flex-col items-center justify-center border-2 border-dashed border-zinc-350 hover:border-indigo-500 rounded-lg py-5 px-3 bg-white cursor-pointer hover:bg-zinc-50/50 transition-all text-center">
+                        <Upload className="w-6 h-6 text-zinc-400 mb-1" />
+                        <span className="text-xs font-bold text-zinc-700">Choose Mailchimp Export File</span>
+                        <span className="text-[9px] text-zinc-400 mt-0.5">Supports .csv, .txt, .pdf</span>
+                        <input
+                          type="file"
+                          accept=".csv,.txt,.pdf"
+                          onChange={handleFileChange}
+                          className="hidden"
+                        />
+                      </label>
+
+                      {importFile && (
+                        <div className="flex items-center gap-2 p-2 bg-zinc-100 rounded border border-zinc-200/60 text-xs text-zinc-700 font-medium">
+                          <FileText className="w-4 h-4 text-indigo-500 shrink-0" />
+                          <span className="truncate flex-1">{importFile.name} ({(importFile.size / 1024).toFixed(1)} KB)</span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setImportFile(null);
+                              setParsedContacts([]);
+                              setParsingError(null);
+                              setImportStats(null);
+                            }}
+                            className="text-rose-500 font-bold hover:text-rose-700 cursor-pointer px-1 text-[11px]"
+                          >
+                            ×
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      <textarea
+                        rows={4}
+                        placeholder="Paste list of emails and names here... (e.g. John Doe john@example.com)"
+                        value={pasteText}
+                        onChange={(e) => setPasteText(e.target.value)}
+                        className="w-full text-xs p-2 bg-white border border-zinc-200 rounded-lg font-mono focus:ring-1 focus:ring-indigo-500 overflow-y-auto"
+                      />
+                      <button
+                        type="button"
+                        onClick={handlePasteParse}
+                        className="w-full py-1.5 bg-zinc-200 hover:bg-zinc-300 border border-zinc-300 text-zinc-800 text-xs font-bold rounded-lg cursor-pointer"
+                      >
+                        Extract Emails
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Parse results preview window */}
+                  {parsingError && (
+                    <div className="p-2.5 bg-rose-50 border border-rose-100 rounded text-[10px] text-rose-700 font-bold flex items-start gap-1.5">
+                      <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                      <span>{parsingError}</span>
+                    </div>
+                  )}
+
+                  {importStats && (
+                    <div className="p-3 bg-emerald-50 border border-emerald-100 rounded text-xs text-emerald-800 space-y-1 animate-fade-in">
+                      <p className="font-bold flex items-center gap-1.5 text-emerald-900 border-b border-emerald-200/50 pb-1">
+                        <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                        Bulk Import Completed!
+                      </p>
+                      <div className="grid grid-cols-3 gap-1 text-[10px] font-semibold text-center pt-1">
+                        <div className="bg-emerald-100/50 p-1.5 rounded">
+                          <p className="text-emerald-900 font-extrabold text-xs">{importStats.imported}</p>
+                          <p className="text-zinc-500 scale-90">Added</p>
+                        </div>
+                        <div className="bg-amber-100/50 p-1.5 rounded">
+                          <p className="text-amber-900 font-extrabold text-xs">{importStats.duplicates}</p>
+                          <p className="text-zinc-500 scale-90">Duplicates</p>
+                        </div>
+                        <div className="bg-rose-100/50 p-1.5 rounded">
+                          <p className="text-rose-900 font-extrabold text-xs">{importStats.invalid}</p>
+                          <p className="text-zinc-500 scale-90">Skipped</p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {parsedContacts.length > 0 && (
+                    <div className="space-y-2 animate-fade-in">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] text-emerald-700 font-extrabold bg-emerald-50 border border-emerald-100 px-2 py-0.5 rounded flex items-center gap-1">
+                          <Check className="w-3 h-3" /> Ready: {parsedContacts.length} Contacts Mapped
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setParsedContacts([])}
+                          className="text-[10px] text-orange-600 hover:underline"
+                        >
+                          Clear
+                        </button>
+                      </div>
+
+                      {/* Display scroll wrapper card of matched emails */}
+                      <div className="border border-zinc-200 rounded bg-white max-h-[145px] overflow-y-auto divide-y divide-zinc-50 select-none">
+                        {parsedContacts.map((c, i) => (
+                          <div key={i} className="p-2 flex justify-between items-center text-[10px] hover:bg-zinc-50">
+                            <div className="truncate pr-2">
+                              <p className="font-bold text-zinc-800 leading-none truncate">{c.email}</p>
+                              <p className="text-[9px] text-zinc-400 mt-0.5 leading-none">Name: {c.name}</p>
+                            </div>
+                            <span className="text-[8px] bg-indigo-50 border border-indigo-150 text-indigo-700 px-1 py-0.5 rounded font-extrabold shrink-0">
+                              Active
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={handleBulkImport}
+                        disabled={importing}
+                        className="w-full py-2.5 bg-indigo-600 border border-indigo-700 text-white text-xs font-extrabold rounded-lg hover:bg-indigo-700 flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50 shadow-2xs"
+                      >
+                        {importing ? (
+                          <>
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            Importing Data Stream...
+                          </>
+                        ) : (
+                          <>
+                            <Plus className="w-3.5 h-3.5" />
+                            Execute Bulk Import
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         </div>
