@@ -288,15 +288,16 @@ export async function sendEmail({ siteKey, to, templateName, variables }: { site
     const rendered = renderTemplate(template, siteKey, variables);
 
     // 4. Determine Sender Address (Support verified domains with fallback support utilizing one sending domain)
-    let baseDomain = 'cyvisahelp.com'; // Default verified sandbox domain
-    const defaultSender = process.env.SENDER_EMAIL || 'noreply@cyvisahelp.com';
+    let baseDomain = 'cylawtech.com'; // Default verified sandbox domain
+    const defaultSender = process.env.SENDER_EMAIL || 'hello@cylawtech.com';
     if (defaultSender && defaultSender.includes('@')) {
         baseDomain = defaultSender.split('@')[1];
     }
 
     let senderName = config.senderName;
-    // Each site gets its own customized prefix mapping directly (e.g. cyvisahelp@domain, cylawtech@domain, cybarprep@domain)
-    let senderEmail = `${siteKey}@${baseDomain}`;
+    // To guarantee delivery to live mailboxes, use the verified SENDER_EMAIL directly.
+    // This supports single-sender verification formats of Resend gracefully.
+    let senderEmail = defaultSender;
     let replyTo = `support@${siteKey}.com`;
 
     // Allow fine-grained override via environment variables if desired
