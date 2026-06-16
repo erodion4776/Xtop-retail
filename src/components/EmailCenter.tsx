@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { Mail, Users, History, Send, Loader2, Plus, AlertCircle, CheckCircle2, ToggleLeft, ToggleRight, Building2, Activity, Check, Search, Filter, RotateCcw, ShieldCheck, HelpCircle, Upload, FileText } from 'lucide-react';
+import { Mail, Users, History, Send, Loader2, Plus, AlertCircle, CheckCircle2, ToggleLeft, ToggleRight, Building2, Activity, Check, Search, Filter, RotateCcw, ShieldCheck, HelpCircle, Upload, FileText, Trash2, Edit3, Tag, X } from 'lucide-react';
 import { siteConfigs } from '../../server/emailConfig';
 
 interface Subscriber {
   id: string;
   email: string;
   name?: string;
+  status?: string;
   tenants?: {
     brand_name: string;
     site_key: string;
@@ -164,6 +165,50 @@ export default function EmailCenter() {
   const [newName, setNewName] = useState('');
   const [addSiteKey, setAddSiteKey] = useState(siteConfigs[0].siteKey);
   const [addingSubscriber, setAddingSubscriber] = useState(false);
+
+  // Edit & Delete subscriber states
+  const [editingSubscriber, setEditingSubscriber] = useState<Subscriber | null>(null);
+  const [editEmail, setEditEmail] = useState('');
+  const [editName, setEditName] = useState('');
+  const [editSiteKey, setEditSiteKey] = useState('');
+  const [editStatus, setEditStatus] = useState('active');
+  const [editTags, setEditTags] = useState<string[]>([]);
+  const [newTagInput, setNewTagInput] = useState('');
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  // Helper functions for custom subscriber tags serialized in name
+  const parseNameAndTags = (rawName: string | undefined): { name: string; tags: string[] } => {
+    if (!rawName) return { name: '', tags: [] };
+    const tags: string[] = [];
+    const tagRegex = /\[([^\]]+)\]/g;
+    let match;
+    let cleanName = rawName;
+    while ((match = tagRegex.exec(rawName)) !== null) {
+      if (match[1].trim()) {
+        tags.push(match[1].trim());
+      }
+    }
+    cleanName = cleanName.replace(/\[[^\]]+\]/g, '').trim();
+    return { name: cleanName, tags };
+  };
+
+  const combineNameAndTags = (cleanName: string, tags: string[]): string => {
+    const formattedTags = tags.filter(t => t.trim()).map(t => `[${t.trim()}]`).join(' ');
+    return `${cleanName.trim()} ${formattedTags}`.trim();
+  };
+
+  const getEmailDomainTag = (email: string): string => {
+    const parts = email.split('@');
+    if (parts.length < 2) return '';
+    const domain = parts[1].toLowerCase();
+    if (domain.includes('gmail.')) return 'GMAIL';
+    if (domain.includes('outlook.') || domain.includes('hotmail.')) return 'MICROSOFT';
+    if (domain.includes('yahoo.')) return 'YAHOO';
+    if (domain.endsWith('.edu')) return 'EDU';
+    if (domain.endsWith('.gov')) return 'GOV';
+    return domain.toUpperCase();
+  };
 
   // New Client-Side Parser States & Functions for Mailchimp Exports (CSV/PDF)
   const [sidebarMode, setSidebarMode] = useState<'manual' | 'import'>('manual');
@@ -547,6 +592,89 @@ export default function EmailCenter() {
     } finally {
       setAddingSubscriber(false);
     }
+  };
+
+  const handleDeleteSubscriber = async (id: string) => {
+    if (!confirm("Are you sure you want to permanently delete this subscriber? All historical campaign links will also be cleared.")) {
+      return;
+    }
+    setDeletingId(id);
+    try {
+      const res = await fetch(`/api/subscribers/${id}`, {
+        method: 'DELETE'
+      });
+      if (res.ok) {
+        fetchData();
+      } else {
+        const data = await res.json();
+        alert(data.error || "Could not delete subscriber.");
+      }
+    } catch (e: any) {
+      alert("Delete failed: " + e.message);
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  const handleStartEditSubscriber = (sub: Subscriber) => {
+    const { name: cleanName, tags } = parseNameAndTags(sub.name);
+    setEditingSubscriber(sub);
+    setEditEmail(sub.email);
+    setEditName(cleanName);
+    setEditSiteKey(sub.tenants?.site_key || 'cyvisahelp');
+    setEditStatus(sub.status || 'active');
+    setEditTags(tags);
+    setNewTagInput('');
+  };
+
+  const handleSaveEditSubscriber = async () => {
+    if (!editingSubscriber) return;
+    if (!editEmail.trim() || !editEmail.includes('@')) {
+      alert("A valid email address is required.");
+      return;
+    }
+
+    setSavingEdit(true);
+    try {
+      // Serialize clean name and tag pills back to DB name field structure
+      const serializedName = combineNameAndTags(editName, editTags);
+
+      const res = await fetch(`/api/subscribers/${editingSubscriber.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: editEmail.trim(),
+          name: serializedName,
+          status: editStatus,
+          siteKey: editSiteKey
+        })
+      });
+
+      if (res.ok) {
+        setEditingSubscriber(null);
+        fetchData();
+      } else {
+        const data = await res.json();
+        alert(data.error || "Failed to update subscriber.");
+      }
+    } catch (e: any) {
+      alert("Update failed: " + e.message);
+    } finally {
+      setSavingEdit(false);
+    }
+  };
+
+  const handleAddEditTag = () => {
+    if (!newTagInput.trim()) return;
+    const cleanTag = newTagInput.trim().toUpperCase();
+    if (!editTags.includes(cleanTag)) {
+      setEditTags([...editTags, cleanTag]);
+    }
+    setNewTagInput('');
+  };
+
+  const handleRemoveEditTag = (tagToRemove: string) => {
+    setEditTags(editTags.filter(t => t !== tagToRemove));
   };
 
   const handleResetWelcomeToDefault = () => {
@@ -1063,29 +1191,96 @@ export default function EmailCenter() {
                     
                     let badgeColor = 'bg-slate-50 text-slate-700 border-slate-100';
                     if (siteKey === 'cylawtech') {
-                      badgeColor = 'bg-blue-50 text-blue-700 border-blue-200';
+                      badgeColor = 'bg-sky-50 text-sky-700 border-sky-150';
                     } else if (siteKey === 'cybarprep') {
-                      badgeColor = 'bg-rose-50 text-rose-700 border-rose-200';
+                      badgeColor = 'bg-rose-50 text-rose-700 border-rose-150';
+                    } else {
+                      badgeColor = 'bg-indigo-50 text-indigo-700 border-indigo-150';
                     }
 
+                    const { name: cleanName, tags } = parseNameAndTags(s.name);
+                    const domainTag = getEmailDomainTag(s.email);
+
                     return (
-                      <div key={s.id} className="flex items-center justify-between p-3 text-xs bg-white hover:bg-zinc-50/50 transition-colors">
-                        <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-full bg-zinc-100 text-zinc-800 flex items-center justify-center font-extrabold text-[11px] border border-zinc-200/50">
-                            {s.email.charAt(0).toUpperCase()}
+                      <div key={s.id} className="flex flex-col sm:flex-row sm:items-center justify-between p-3.5 gap-3 bg-white hover:bg-zinc-50/50 transition-all border-b border-zinc-100 last:border-b-0 hover:shadow-xs">
+                        {/* Contact details with tags */}
+                        <div className="flex items-start gap-3 min-w-0 flex-1">
+                          <div className="w-9 h-9 rounded-full bg-zinc-100 text-zinc-800 flex items-center justify-center font-black text-xs border border-zinc-200 shrink-0 shadow-xs mt-0.5">
+                            {(cleanName || s.email).charAt(0).toUpperCase()}
                           </div>
-                          <div>
-                            <p className="font-bold text-zinc-800">{s.email}</p>
-                            {s.name && <p className="text-[10px] text-zinc-500 font-medium">{s.name}</p>}
+                          <div className="min-w-0 space-y-1">
+                            <div className="flex flex-wrap items-center gap-1.5">
+                              <p className="font-bold text-zinc-900 truncate leading-tight">{s.email}</p>
+                              {domainTag && (
+                                <span className="text-[9px] bg-zinc-100 border border-zinc-250/70 text-zinc-600 px-1.5 py-0.5 rounded font-mono font-bold shrink-0">
+                                  {domainTag}
+                                </span>
+                              )}
+                            </div>
+                            
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="text-[10px] text-zinc-500 font-bold truncate shrink-0 max-w-[150px]" title={cleanName || 'No Name'}>
+                                {cleanName || 'No Name'}
+                              </span>
+                              
+                              {/* Tags collection list */}
+                              {tags.length > 0 ? (
+                                <div className="flex flex-wrap gap-1">
+                                  {tags.map((tag, idx) => (
+                                    <span key={idx} className="text-[8px] bg-amber-50 border border-amber-200 text-amber-800 px-1.5 py-0.5 rounded font-black uppercase shrink-0 flex items-center gap-0.5">
+                                      <Tag className="w-2 h-2 text-amber-650" /> {tag}
+                                    </span>
+                                  ))}
+                                </div>
+                              ) : (
+                                <span className="text-[8px] bg-zinc-50 border border-zinc-200 text-zinc-400 px-1.5 py-0.5 rounded font-medium shrink-0 italic">
+                                  no tag
+                                </span>
+                              )}
+                            </div>
                           </div>
                         </div>
-                        <div className="flex items-center gap-2">
-                          <span className={`text-[10px] font-bold border px-2 py-0.5 rounded ${badgeColor}`}>
+
+                        {/* Badges & Action Pillars */}
+                        <div className="flex flex-wrap items-center gap-2 sm:shrink-0 justify-between sm:justify-start">
+                          <span className={`text-[10px] font-extrabold border px-2.5 py-0.5 rounded ${badgeColor}`}>
                             {brandName}
                           </span>
-                          <span className="text-[10px] text-emerald-600 font-bold bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-100">
-                            Active
+                          
+                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded border uppercase tracking-wider ${
+                            (s.status || 'active').toLowerCase() === 'active'
+                              ? 'bg-emerald-50 text-emerald-700 border-emerald-100'
+                              : 'bg-rose-50 text-rose-700 border-rose-100'
+                          }`}>
+                            {s.status || 'Active'}
                           </span>
+
+                          <div className="flex items-center gap-1 ml-auto sm:ml-2">
+                            <button
+                              type="button"
+                              onClick={() => handleStartEditSubscriber(s)}
+                              className="p-1.5 bg-white hover:bg-zinc-50 border border-zinc-200 hover:border-zinc-350 text-zinc-700 rounded transition-all cursor-pointer flex items-center gap-1 shadow-xs"
+                              title="Edit Subscriber"
+                            >
+                              <Edit3 className="w-3.5 h-3.5 text-zinc-500" />
+                              <span className="text-[10px] font-bold">Edit</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteSubscriber(s.id)}
+                              disabled={deletingId === s.id}
+                              className="p-1.5 bg-white hover:bg-rose-50 border border-zinc-200 hover:border-rose-200 text-zinc-700 hover:text-rose-600 rounded transition-all cursor-pointer flex items-center gap-1 disabled:opacity-50 shadow-xs"
+                              title="Delete Subscriber"
+                            >
+                              {deletingId === s.id ? (
+                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                              ) : (
+                                <Trash2 className="w-3.5 h-3.5 text-zinc-500 hover:text-rose-500" />
+                              )}
+                              <span className="text-[10px] font-bold">Delete</span>
+                            </button>
+                          </div>
                         </div>
                       </div>
                     );
@@ -1870,6 +2065,149 @@ export default function EmailCenter() {
               ))}
             </div>
           )}
+        </div>
+      )}
+
+      {/* PERSISTENT SUBSCRIBER EDITOR DIALOG OVERLAY */}
+      {editingSubscriber && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-fade-in">
+          <div className="bg-white border border-zinc-200 rounded-xl max-w-md w-full p-6 shadow-xl space-y-4 relative">
+            <button
+              onClick={() => setEditingSubscriber(null)}
+              className="absolute top-4 right-4 text-zinc-400 hover:text-zinc-650 cursor-pointer p-1 rounded-lg hover:bg-zinc-100 transition-all border-0 outline-none"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div>
+              <h3 className="font-bold text-base text-zinc-900 flex items-center gap-1.5">
+                <Edit3 className="w-5 h-5 text-indigo-600 animate-pulse" /> Edit Subscriber Profile
+              </h3>
+              <p className="text-xs text-zinc-500 mt-1">
+                Modify contact credentials, brand subscriptions, status tiers, or customer tags.
+              </p>
+            </div>
+
+            <div className="space-y-3 pt-2">
+              <div className="space-y-1">
+                <label className="text-[10px] uppercase font-extrabold text-zinc-500 block">Contact Email</label>
+                <input
+                  type="email"
+                  value={editEmail}
+                  onChange={(e) => setEditEmail(e.target.value)}
+                  className="w-full text-xs py-2 px-3 bg-white border border-zinc-250 rounded-lg outline-none focus:ring-1 focus:ring-indigo-500 font-semibold"
+                  placeholder="e.g. client@example.com"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] uppercase font-extrabold text-zinc-500 block">Client name</label>
+                <input
+                  type="text"
+                  value={editName}
+                  onChange={(e) => setEditName(e.target.value)}
+                  className="w-full text-xs py-2 px-3 bg-white border border-zinc-250 rounded-lg outline-none focus:ring-1 focus:ring-indigo-500 font-medium"
+                  placeholder="e.g. Michael Scott"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="text-[10px] uppercase font-extrabold text-zinc-500 block">Web Property Brand</label>
+                  <select
+                    value={editSiteKey}
+                    onChange={(e) => setEditSiteKey(e.target.value)}
+                    className="w-full text-xs py-2 px-2 bg-white border border-zinc-250 rounded-lg outline-none cursor-pointer focus:ring-1 focus:ring-indigo-500 text-zinc-800 font-bold"
+                  >
+                    {siteConfigs.map(s => (
+                      <option key={s.siteKey} value={s.siteKey}>{s.brandName}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[10px] uppercase font-extrabold text-zinc-500 block">Subscription Status</label>
+                  <select
+                    value={editStatus}
+                    onChange={(e) => setEditStatus(e.target.value)}
+                    className="w-full text-xs py-2 px-2 bg-white border border-zinc-250 rounded-lg outline-none cursor-pointer focus:ring-1 focus:ring-indigo-500 text-zinc-800 font-bold"
+                  >
+                    <option value="active">Active</option>
+                    <option value="unsubscribed">Unsubscribed</option>
+                    <option value="banned">Banned</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* TAGS EDITOR */}
+              <div className="space-y-1.5 pt-1">
+                <label className="text-[10px] uppercase font-extrabold text-zinc-500 block">Subscriber Tags</label>
+                
+                {/* Visual items list of existing tag array */}
+                <div className="flex flex-wrap gap-1 bg-zinc-50 p-2.5 border border-zinc-200 rounded-lg min-h-[44px]">
+                  {editTags.length === 0 ? (
+                    <span className="text-[10px] text-zinc-400 italic">No custom tags assigned yet.</span>
+                  ) : (
+                    editTags.map((tag, idx) => (
+                      <span key={idx} className="text-[10px] bg-indigo-50 border border-indigo-150 text-indigo-700 px-2 py-0.5 rounded-full font-bold flex items-center gap-1 uppercase">
+                        <span>{tag}</span>
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveEditTag(tag)}
+                          className="text-indigo-400 hover:text-indigo-700 font-black text-xs hover:bg-indigo-100 px-1 rounded-full cursor-pointer border-0"
+                        >
+                          ×
+                        </button>
+                      </span>
+                    ))
+                  )}
+                </div>
+
+                {/* Sub-form to append a new tag with keyboard return support */}
+                <div className="flex gap-1.5 mt-1">
+                  <input
+                    type="text"
+                    placeholder="E.g. VIP, LEAD, UK..."
+                    value={newTagInput}
+                    onChange={(e) => setNewTagInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        handleAddEditTag();
+                      }
+                    }}
+                    className="flex-1 text-xs py-1.5 px-3 bg-white border border-zinc-250 rounded-lg outline-none focus:ring-1 focus:ring-indigo-500"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleAddEditTag}
+                    className="py-1.5 px-3.5 bg-zinc-900 text-white text-xs font-bold rounded-lg cursor-pointer hover:bg-zinc-800 shadow-xs border-0"
+                  >
+                    Add Tag
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex gap-2.5 pt-4 border-t border-zinc-150 flex-row-reverse">
+              <button
+                type="button"
+                onClick={handleSaveEditSubscriber}
+                disabled={savingEdit}
+                className="flex-1 py-2.5 bg-indigo-600 hover:bg-indigo-700 border-0 text-white text-xs font-extrabold rounded-lg flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50 shadow-xs"
+              >
+                {savingEdit ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-4 h-4" />}
+                Save and Sync Profile
+              </button>
+              <button
+                type="button"
+                onClick={() => setEditingSubscriber(null)}
+                className="flex-1 py-2.5 bg-zinc-100 hover:bg-zinc-200 border border-zinc-200 text-zinc-700 text-xs font-bold rounded-lg cursor-pointer shadow-xs"
+              >
+                Discard Changes
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

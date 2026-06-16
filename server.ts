@@ -281,6 +281,81 @@ async function startServer() {
     }
   });
 
+  // PUT /api/subscribers/:id
+  app.put("/api/subscribers/:id", async (req: any, res: any) => {
+    const { id } = req.params;
+    const { email, name, status, siteKey } = req.body;
+
+    if (!id) {
+        return res.status(400).json({ error: "Subscriber ID is required." });
+    }
+
+    try {
+        const updateData: any = {};
+        if (email !== undefined) updateData.email = email;
+        if (name !== undefined) updateData.name = name;
+        if (status !== undefined) updateData.status = status;
+
+        if (siteKey !== undefined) {
+            let { data: tenant } = await supabaseAdmin.from('tenants').select('id, brand_name').eq('site_key', siteKey).single();
+            if (tenant) {
+                updateData.tenant_id = tenant.id;
+            }
+        }
+
+        const { data, error } = await supabaseAdmin
+            .from('subscribers')
+            .update(updateData)
+            .eq('id', id)
+            .select(`
+                id,
+                email,
+                name,
+                status,
+                created_at,
+                tenants (
+                    id,
+                    brand_name,
+                    site_key
+                )
+            `)
+            .single();
+
+        if (error) throw error;
+        addDebugLog('INFO', `Updated subscriber ${email || id} successfully`);
+        res.json(data);
+    } catch (err: any) {
+        addDebugLog('ERROR', `Failed update of subscriber ${id}: ${err.message}`);
+        res.status(500).json({ error: err.message });
+    }
+  });
+
+  // DELETE /api/subscribers/:id
+  app.delete("/api/subscribers/:id", async (req: any, res: any) => {
+    const { id } = req.params;
+
+    if (!id) {
+        return res.status(400).json({ error: "Subscriber ID is required." });
+    }
+
+    try {
+        // Delete dependent campaign recipient rows first to avoid foreign key violations
+        await supabaseAdmin.from('campaign_recipients').delete().eq('subscriber_id', id);
+
+        const { error } = await supabaseAdmin
+            .from('subscribers')
+            .delete()
+            .eq('id', id);
+
+        if (error) throw error;
+        addDebugLog('INFO', `Deleted subscriber ID: ${id}`);
+        res.json({ success: true });
+    } catch (err: any) {
+        addDebugLog('ERROR', `Failed standard deletion of subscriber ${id}: ${err.message}`);
+        res.status(500).json({ error: err.message });
+    }
+  });
+
   // POST /api/subscribers/bulk
   app.post("/api/subscribers/bulk", async (req: any, res: any) => {
     const { subscribers: list, siteKey } = req.body;
