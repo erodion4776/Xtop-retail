@@ -479,7 +479,7 @@ async function startServer() {
                   .eq('tenant_id', tenant.id)
                   .eq('status', 'active');
               targets = data?.map((s: any) => s.email) || [];
-          } else if ((sendTo === 'single' || sendTo === 'selected') && emails?.length) {
+          } else if ((sendTo === 'single' || sendTo === 'selected' || sendTo === 'tags') && emails?.length) {
               targets = emails;
           }
 

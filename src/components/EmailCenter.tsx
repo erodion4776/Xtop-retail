@@ -137,7 +137,8 @@ export default function EmailCenter() {
   const [siteKey, setSiteKey] = useState(siteConfigs[0].siteKey);
   const [subject, setSubject] = useState('');
   const [message, setMessage] = useState('');
-  const [sendTo, setSendTo] = useState<'all' | 'single' | 'selected'>('all');
+  const [sendTo, setSendTo] = useState<'all' | 'single' | 'selected' | 'tags'>('all');
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [selectedSubscriberEmails, setSelectedSubscriberEmails] = useState<string[]>([]);
   const [selectSearchQuery, setSelectSearchQuery] = useState('');
   const [singleEmail, setSingleEmail] = useState('');
@@ -519,6 +520,31 @@ export default function EmailCenter() {
       setSendResult({ ok: false, msg: 'Please select at least one contact from the list below.' });
       return;
     }
+    if (sendTo === 'tags' && selectedTags.length === 0) {
+      setSendResult({ ok: false, msg: 'Please select at least one tag to filter contacts by.' });
+      return;
+    }
+
+    let targetEmails: string[] = [];
+    if (sendTo === 'single') {
+      targetEmails = [singleEmail];
+    } else if (sendTo === 'selected') {
+      targetEmails = selectedSubscriberEmails;
+    } else if (sendTo === 'tags') {
+      targetEmails = subscribers
+        .filter(s => (s.tenants?.site_key || 'cyvisahelp') === siteKey && s.status === 'active')
+        .filter(s => {
+          const { tags } = parseNameAndTags(s.name);
+          return tags.some(t => selectedTags.includes(t));
+        })
+        .map(s => s.email);
+
+      if (targetEmails.length === 0) {
+        setSendResult({ ok: false, msg: 'No active subscribers found with the selected tag(s).' });
+        return;
+      }
+    }
+
     setSending(true);
     setSendResult(null);
     try {
@@ -530,9 +556,7 @@ export default function EmailCenter() {
           subject,
           message,
           sendTo,
-          emails: sendTo === 'single' 
-            ? [singleEmail] 
-            : (sendTo === 'selected' ? selectedSubscriberEmails : []),
+          emails: targetEmails,
         }),
       });
       const data = await res.json();
@@ -542,6 +566,7 @@ export default function EmailCenter() {
         setMessage('');
         setSingleEmail('');
         setSelectedSubscriberEmails([]);
+        setSelectedTags([]);
         fetchData();
       } else {
         setSendResult({ ok: false, msg: data.error || 'Failed to dispatch email campaign.' });
@@ -827,18 +852,29 @@ export default function EmailCenter() {
                   <button
                     type="button"
                     onClick={() => setSendTo('all')}
-                    className={`flex-1 min-w-[120px] py-2 text-xs font-semibold rounded-lg border transition-all cursor-pointer ${
+                    className={`flex-1 min-w-[120px] py-1.5 text-xs font-semibold rounded-lg border transition-all cursor-pointer ${
                       sendTo === 'all'
                         ? 'bg-zinc-900 text-white border-zinc-900'
                         : 'bg-white text-zinc-600 border-zinc-200 hover:bg-zinc-50'
                     }`}
                   >
-                    All Subscribers ({subscribers.filter(s => (s.tenants?.site_key || 'cyvisahelp') === siteKey).length})
+                    All ({subscribers.filter(s => (s.tenants?.site_key || 'cyvisahelp') === siteKey).length})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSendTo('tags')}
+                    className={`flex-1 min-w-[120px] py-1.5 text-xs font-semibold rounded-lg border transition-all cursor-pointer ${
+                      sendTo === 'tags'
+                        ? 'bg-zinc-900 text-white border-zinc-900'
+                        : 'bg-white text-zinc-600 border-zinc-200 hover:bg-zinc-50'
+                    }`}
+                  >
+                    Filter by Tag ({selectedTags.length} Selected)
                   </button>
                   <button
                     type="button"
                     onClick={() => setSendTo('selected')}
-                    className={`flex-1 min-w-[120px] py-2 text-xs font-semibold rounded-lg border transition-all cursor-pointer ${
+                    className={`flex-1 min-w-[120px] py-1.5 text-xs font-semibold rounded-lg border transition-all cursor-pointer ${
                       sendTo === 'selected'
                         ? 'bg-zinc-900 text-white border-zinc-900'
                         : 'bg-white text-zinc-600 border-zinc-200 hover:bg-zinc-50'
@@ -849,7 +885,7 @@ export default function EmailCenter() {
                   <button
                     type="button"
                     onClick={() => setSendTo('single')}
-                    className={`flex-1 min-w-[120px] py-2 text-xs font-semibold rounded-lg border transition-all cursor-pointer ${
+                    className={`flex-1 min-w-[110px] py-1.5 text-xs font-semibold rounded-lg border transition-all cursor-pointer ${
                       sendTo === 'single'
                         ? 'bg-zinc-900 text-white border-zinc-900'
                         : 'bg-white text-zinc-600 border-zinc-200 hover:bg-zinc-50'
@@ -860,6 +896,85 @@ export default function EmailCenter() {
                 </div>
               </div>
             </div>
+
+            {sendTo === 'tags' && (
+              <div className="space-y-4 border border-zinc-200 bg-zinc-50 p-4 rounded-lg animate-fade-in">
+                <div>
+                  <h5 className="text-xs font-bold text-zinc-800">Target Contacts by Tags</h5>
+                  <p className="text-[10px] text-zinc-500">Select one or more tags. Subscribers associated with any of the selected tags will receive this campaign.</p>
+                </div>
+
+                {/* Available tags pill board */}
+                <div className="flex flex-wrap gap-2 p-3 bg-white border border-zinc-150 rounded-lg">
+                  {(() => {
+                    const siteSubs = subscribers.filter(s => (s.tenants?.site_key || 'cyvisahelp') === siteKey && s.status === 'active');
+                    const allTags = new Set<string>();
+                    siteSubs.forEach(s => {
+                      const { tags } = parseNameAndTags(s.name);
+                      tags.forEach(t => allTags.add(t));
+                    });
+                    const availableTags = Array.from(allTags);
+
+                    if (availableTags.length === 0) {
+                      return <span className="text-[11px] text-zinc-400 italic">No user tags found on active {siteConfigs.find(s=>s.siteKey===siteKey)?.brandName} subscribers. Setup tags by editing names of subscribers to include brackets like '[VIP]' inside the Contacts tab.</span>;
+                    }
+                    return availableTags.map(tag => {
+                      const isSelected = selectedTags.includes(tag);
+                      return (
+                        <button
+                          key={tag}
+                          type="button"
+                          onClick={() => {
+                            if (isSelected) {
+                              setSelectedTags(prev => prev.filter(t => t !== tag));
+                            } else {
+                              setSelectedTags(prev => [...prev, tag]);
+                            }
+                          }}
+                          className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold border transition-colors cursor-pointer ${
+                            isSelected
+                              ? 'bg-indigo-600 border-indigo-700 text-white'
+                              : 'bg-zinc-100 border-zinc-200 text-zinc-600 hover:bg-zinc-200'
+                          }`}
+                        >
+                          🏷️ {tag}
+                        </button>
+                      );
+                    });
+                  })()}
+                </div>
+
+                {/* Live Match Preview */}
+                {selectedTags.length > 0 && (
+                  <div className="space-y-2">
+                    <span className="text-[11px] font-bold text-zinc-600 block">Matching Contacts Preview:</span>
+                    <div className="max-h-36 overflow-y-auto border border-zinc-150 bg-white rounded-md divide-y divide-zinc-100 text-xs text-zinc-700">
+                      {subscribers
+                        .filter(s => (s.tenants?.site_key || 'cyvisahelp') === siteKey && s.status === 'active')
+                        .filter(s => {
+                          const { tags } = parseNameAndTags(s.name);
+                          return tags.some(t => selectedTags.includes(t));
+                        })
+                        .map(sub => {
+                          const { name: cleanName, tags } = parseNameAndTags(sub.name);
+                          return (
+                            <div key={sub.id} className="flex justify-between items-center px-3 py-1.5 font-medium">
+                              <span className="font-semibold text-zinc-800">{sub.email} <span className="text-[10px] text-zinc-450">({cleanName || 'No Name'})</span></span>
+                              <div className="flex gap-1">
+                                {tags.map(t => (
+                                  <span key={t} className="px-1.5 py-0.5 text-[9px] bg-amber-50 text-amber-700 font-bold rounded-sm border border-amber-100 uppercase">
+                                    {t}
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                          );
+                        })}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
 
             {sendTo === 'selected' && (
               <div className="space-y-2 border border-zinc-200 bg-zinc-50 p-4 rounded-lg animate-fade-in">
@@ -1041,7 +1156,14 @@ export default function EmailCenter() {
                     ? subscribers.filter(s => (s.tenants?.site_key || 'cyvisahelp') === siteKey).length + " active subscriber(s)"
                     : sendTo === 'selected'
                       ? selectedSubscriberEmails.length + " selected subscriber(s)"
-                      : "1 single recipient"
+                      : sendTo === 'tags'
+                        ? subscribers
+                            .filter(s => (s.tenants?.site_key || 'cyvisahelp') === siteKey && s.status === 'active')
+                            .filter(s => {
+                              const { tags } = parseNameAndTags(s.name);
+                              return tags.some(t => selectedTags.includes(t));
+                            }).length + " matching subscriber(s)"
+                        : "1 single recipient"
                   }
                 </span>
               </div>
