@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { 
   Mail, Send, Loader2, Sparkles, Code, CheckCircle, 
-  AlertCircle, Building2, Activity, History, PlayCircle, Eye, RefreshCw
+  AlertCircle, Building2, Activity, History, PlayCircle, Eye, 
+  RefreshCw, Save, Trash2, FolderOpen, FileText, BookOpen
 } from 'lucide-react';
 import { siteConfigs } from '../../server/emailConfig';
 
 // Internal Splitted Refactored Modules
-import { Subscriber, EmailLog, WelcomeTemplate, ActiveTab, SITE_DEFAULTS } from './EmailCenter/types';
+import { Subscriber, EmailLog, WelcomeTemplate, ActiveTab, SavedTemplate, SITE_DEFAULTS } from './EmailCenter/types';
 import { EmailHealthTab } from './EmailCenter/EmailHealthTab';
 import { TestEmailTab } from './EmailCenter/TestEmailTab';
 
@@ -24,7 +25,7 @@ export default function EmailCenter() {
   const [campaignCustomEmails, setCampaignCustomEmails] = useState('');
   const [campaignStatus, setCampaignStatus] = useState<{ success?: boolean; msg?: string } | null>(null);
 
-  // --- Welcome Template & AI Mimic State ---
+  // --- Welcome Template State ---
   const [welcomeSiteKey, setWelcomeSiteKey] = useState('cyvisahelp');
   const [welcomeSubject, setWelcomeSubject] = useState('');
   const [welcomeBody, setWelcomeBody] = useState('');
@@ -39,7 +40,23 @@ export default function EmailCenter() {
   const [aiError, setAiError] = useState<string | null>(null);
   const [previewTab, setPreviewTab] = useState<'preview' | 'code'>('preview');
 
-  // Load deliverability history & subscribers list from backend
+  // --- NEW: Text-to-HTML Conversion Panel State ---
+  const [showTextToHtml, setShowTextToHtml] = useState(false);
+  const [rawTextNotes, setRawTextNotes] = useState('');
+  const [textToHtmlSubject, setTextToHtmlSubject] = useState('');
+  const [aiConvertingText, setAiConvertingText] = useState(false);
+  const [aiTextError, setAiTextError] = useState<string | null>(null);
+
+  // --- NEW: Saved Template Library State ---
+  const [libraryTemplates, setLibraryTemplates] = useState<SavedTemplate[]>([]);
+  const [libraryLoading, setLibraryLoading] = useState(false);
+  const [librarySiteKey, setLibrarySiteKey] = useState('cyvisahelp');
+  const [saveTemplateName, setSaveTemplateName] = useState('');
+  const [saveTemplateDesc, setSaveTemplateDesc] = useState('');
+  const [saveTemplateCategory, setSaveTemplateCategory] = useState<'general' | 'reference'>('general');
+  const [saveTemplateStatus, setSaveTemplateStatus] = useState<string | null>(null);
+
+  // Load system stats and logs
   const fetchData = async () => {
     setIsLoading(true);
     try {
@@ -55,9 +72,25 @@ export default function EmailCenter() {
         setSubscribers(subsData);
       }
     } catch (err) {
-      console.error("Failed to fetch Outbound Log Metrics:", err);
+      console.error("Failed to fetch logs and subscribers:", err);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  // Fetch saved templates from library database
+  const fetchLibraryTemplates = async (siteKey: string) => {
+    setLibraryLoading(true);
+    try {
+      const res = await fetch(`/api/template-library/${siteKey}`);
+      if (res.ok) {
+        const data = await res.json();
+        setLibraryTemplates(data);
+      }
+    } catch (err) {
+      console.error("Failed to load templates from library:", err);
+    } finally {
+      setLibraryLoading(false);
     }
   };
 
@@ -65,7 +98,13 @@ export default function EmailCenter() {
     fetchData();
   }, [activeTab]);
 
-  // Load specific welcome automation template when siteKey changes
+  useEffect(() => {
+    if (activeTab === 'library') {
+      fetchLibraryTemplates(librarySiteKey);
+    }
+  }, [librarySiteKey, activeTab]);
+
+  // Load specific welcome template
   const fetchWelcomeTemplate = async () => {
     setWelcomeLoading(true);
     setWelcomeSaveStatus(null);
@@ -89,7 +128,7 @@ export default function EmailCenter() {
     }
   }, [welcomeSiteKey, activeTab]);
 
-  // Handle direct HTML multi-brand newsletter broadcasts
+  // Handle direct campaign broadcasts
   const handleSendCampaign = async (e: React.FormEvent) => {
     e.preventDefault();
     setCampaignStatus(null);
@@ -124,17 +163,115 @@ export default function EmailCenter() {
 
       const data = await res.json();
       if (res.ok && data.success) {
-        setCampaignStatus({ success: true, msg: `Broadcast successfully completed to ${data.sent} active target recipient(s)!` });
+        setCampaignStatus({ success: true, msg: `Broadcast completed to ${data.sent} active target recipient(s)!` });
         setCampaignSubject('');
         setCampaignCustomEmails('');
         fetchData();
       } else {
-        setCampaignStatus({ success: false, msg: data.error || 'The campaign broadcast request was rejected by the server.' });
+        setCampaignStatus({ success: false, msg: data.error || 'Outbound broadcast request rejected by server.' });
       }
     } catch (err: any) {
       setCampaignStatus({ success: false, msg: err.message || 'Outbound campaign dispatch failed.' });
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  // Convert raw text to HTML with Gemini AI
+  const handleTextToHtmlConversion = async (targetField: 'welcome' | 'campaign') => {
+    if (!rawTextNotes.trim()) {
+      setAiTextError('Please paste your plain text notes first.');
+      return;
+    }
+    setAiConvertingText(true);
+    setAiTextError(null);
+
+    const siteKey = targetField === 'welcome' ? welcomeSiteKey : campaignSiteKey;
+    const subject = textToHtmlSubject || (targetField === 'welcome' ? welcomeSubject : campaignSubject);
+
+    try {
+      const res = await fetch('/api/generate-html-from-text', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          siteKey,
+          rawText: rawTextNotes,
+          subject
+        })
+      });
+
+      const data = await res.json();
+      if (res.ok && data.success) {
+        if (targetField === 'welcome') {
+          setWelcomeBody(data.html);
+          if (textToHtmlSubject) setWelcomeSubject(textToHtmlSubject);
+        } else {
+          setCampaignHtml(data.html);
+          if (textToHtmlSubject) setCampaignSubject(textToHtmlSubject);
+        }
+        setRawTextNotes('');
+        setTextToHtmlSubject('');
+        setShowTextToHtml(false);
+      } else {
+        setAiTextError(data.error || 'Unable to parse plain text notes into email format.');
+      }
+    } catch (err: any) {
+      setAiTextError(`AI Text conversion failed: ${err.message}`);
+    } finally {
+      setAiConvertingText(false);
+    }
+  };
+
+  // Save layout template to Library Database
+  const handleSaveToLibrary = async (editorType: 'welcome' | 'campaign') => {
+    setSaveTemplateStatus(null);
+    const siteKey = editorType === 'welcome' ? welcomeSiteKey : campaignSiteKey;
+    const htmlContent = editorType === 'welcome' ? welcomeBody : campaignHtml;
+    const fallbackName = `${siteKey.toUpperCase()} - Saved Draft (${new Date().toLocaleDateString()})`;
+
+    if (!saveTemplateName.trim()) {
+      alert("Please provide a name for the saved layout template.");
+      return;
+    }
+
+    try {
+      const res = await fetch(`/api/template-library/${siteKey}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: saveTemplateName,
+          description: saveTemplateDesc,
+          html_content: htmlContent,
+          category: saveTemplateCategory
+        })
+      });
+
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setSaveTemplateStatus(`Template saved to library successfully!`);
+        setSaveTemplateName('');
+        setSaveTemplateDesc('');
+        setTimeout(() => setSaveTemplateStatus(null), 4000);
+      } else {
+        alert(data.error || 'Unable to save template layout.');
+      }
+    } catch (err: any) {
+      alert(`Network failure: ${err.message}`);
+    }
+  };
+
+  // Delete saved template
+  const handleDeleteTemplateFromLibrary = async (id: string) => {
+    if (!confirm('Are you sure you want to delete this template blueprint from your library?')) return;
+    try {
+      const res = await fetch(`/api/template-library/${id}`, { method: 'DELETE' });
+      if (res.ok) {
+        fetchLibraryTemplates(librarySiteKey);
+      } else {
+        alert('Failed to delete template layout.');
+      }
+    } catch (err: any) {
+      alert(`Error deleting layout: ${err.message}`);
     }
   };
 
@@ -174,7 +311,7 @@ export default function EmailCenter() {
     }
   };
 
-  // Save changes to Welcome Template Database
+  // Activate welcome onboarding templates
   const handleSaveWelcomeTemplate = async () => {
     setWelcomeLoading(true);
     setWelcomeSaveStatus(null);
@@ -202,7 +339,7 @@ export default function EmailCenter() {
     }
   };
 
-  // Simulate real-time bounces/delivery feedback loops via developer webhook simulator endpoints
+  // Simulate webhook deliveries
   const handleSimulateWebhook = async (email: string, status: 'delivered' | 'bounced' | 'complaint') => {
     try {
       const res = await fetch('/api/test/simulate-webhook', {
@@ -236,6 +373,7 @@ export default function EmailCenter() {
           { id: 'health' as ActiveTab, label: 'Outbound Health Score', icon: Activity },
           { id: 'send' as ActiveTab, label: 'Broadcast Campaign', icon: Send },
           { id: 'welcome' as ActiveTab, label: 'Welcome Onboarding & AI Mimic', icon: Sparkles },
+          { id: 'library' as ActiveTab, label: 'Template Library', icon: BookOpen },
           { id: 'logs' as ActiveTab, label: 'Delivery logs & webhook test', icon: History },
           { id: 'test' as ActiveTab, label: 'Direct Deliverability Test', icon: PlayCircle },
         ].map((tab) => {
@@ -266,103 +404,236 @@ export default function EmailCenter() {
         {activeTab === 'test' && <TestEmailTab />}
 
         {activeTab === 'send' && (
-          <form onSubmit={handleSendCampaign} className="bg-white border border-zinc-200 rounded-xl p-6 shadow-xs space-y-5 max-w-4xl">
-            <div className="flex gap-3 items-center pb-3 border-b border-zinc-100">
-              <Building2 className="w-4.5 h-4.5 text-zinc-400" />
-              <h3 className="font-bold text-sm text-zinc-900">Broadcast Campaign Setup</h3>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <label className="text-[11px] font-bold text-zinc-500 uppercase">Brand Sender Profile</label>
-                <select
-                  value={campaignSiteKey}
-                  onChange={(e) => setCampaignSiteKey(e.target.value)}
-                  className="w-full text-xs py-2.5 px-3 bg-zinc-50 border border-zinc-200 rounded-lg text-zinc-800 font-medium"
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 max-w-7xl items-start">
+            <form onSubmit={handleSendCampaign} className="bg-white border border-zinc-200 rounded-xl p-6 shadow-xs space-y-5 lg:col-span-2">
+              <div className="flex justify-between items-center pb-3 border-b border-zinc-100">
+                <div className="flex gap-3 items-center">
+                  <Building2 className="w-4.5 h-4.5 text-zinc-400" />
+                  <h3 className="font-bold text-sm text-zinc-900">Broadcast Campaign Setup</h3>
+                </div>
+                
+                <button
+                  type="button"
+                  onClick={() => setShowTextToHtml(!showTextToHtml)}
+                  className="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 border border-indigo-100 text-indigo-700 rounded text-[10px] font-bold flex items-center gap-1 cursor-pointer transition-all active:scale-95"
                 >
-                  <option value="cyvisahelp">CY Visa Help (hello@cyvisahelp.com)</option>
-                  <option value="cybarprep">CY Bar Prep (support@cybarprep.com)</option>
-                  <option value="cylawtech">CY Law Tech (hello@cylawtech.com)</option>
-                </select>
+                  <Sparkles className="w-3 h-3 text-indigo-600 animate-pulse" /> ✨ AI Text Converter
+                </button>
               </div>
 
-              <div className="space-y-1.5">
-                <label className="text-[11px] font-bold text-zinc-500 uppercase">Target Audience</label>
-                <select
-                  value={campaignTarget}
-                  onChange={(e) => setCampaignTarget(e.target.value as any)}
-                  className="w-full text-xs py-2.5 px-3 bg-zinc-50 border border-zinc-200 rounded-lg text-zinc-800 font-medium cursor-pointer"
-                >
-                  <option value="all">Active brand property subscribers (automated segmentation)</option>
-                  <option value="custom">Manual target list (custom comma-separated addresses)</option>
-                </select>
-              </div>
-            </div>
+              {/* Text-to-HTML AI Converter Panel */}
+              {showTextToHtml && (
+                <div className="p-4 bg-indigo-50/40 border border-indigo-100 rounded-lg space-y-3 animate-slide-down">
+                  <div className="flex items-center gap-2">
+                    <Sparkles className="w-4 h-4 text-indigo-600 animate-pulse" />
+                    <h4 className="font-bold text-xs text-indigo-900">Convert Plain Text → Branded HTML</h4>
+                  </div>
+                  <p className="text-[11px] text-zinc-650 leading-relaxed">
+                    Paste your raw text newsletter draft below. Gemini AI will automatically convert it into a beautiful, cross-platform email layout that inherits the style, buttons, header, and footer of your brand.
+                  </p>
+                  
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold text-indigo-750 uppercase">Email Subject (Optional Override)</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. Big Immigration Changes Happening This August!"
+                      value={textToHtmlSubject}
+                      onChange={(e) => setTextToHtmlSubject(e.target.value)}
+                      className="w-full text-xs p-2 bg-white border border-indigo-100 rounded focus:outline-hidden"
+                    />
+                  </div>
 
-            {campaignTarget === 'custom' && (
-              <div className="space-y-1.5 animate-fade-in">
-                <label className="text-[11px] font-bold text-zinc-500 uppercase">Target Recipients Addresses</label>
-                <input
-                  type="text"
-                  placeholder="e.g. testing1@domain.com, testing2@domain.com"
-                  value={campaignCustomEmails}
-                  onChange={(e) => setCampaignCustomEmails(e.target.value)}
-                  className="w-full text-xs py-2.5 px-3 bg-zinc-50 border border-zinc-200 rounded-lg text-zinc-800 font-medium"
-                />
-              </div>
-            )}
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold text-indigo-750 uppercase">Raw Newsletter Notes / Plain Text</label>
+                    <textarea
+                      rows={6}
+                      placeholder="1. TPS changes Ukraine October 19. Don't wait to check options.&#10;2. August Visa Bulletin Priority Dates. eligibility check.&#10;3. Tips: Check with lawyers, avoid social media rumours."
+                      value={rawTextNotes}
+                      onChange={(e) => setRawTextNotes(e.target.value)}
+                      className="w-full text-xs p-2.5 bg-white border border-indigo-100 rounded focus:outline-hidden text-zinc-800"
+                    />
+                  </div>
 
-            <div className="space-y-1.5">
-              <label className="text-[11px] font-bold text-zinc-500 uppercase">Outbound Subject Line</label>
-              <input
-                type="text"
-                placeholder="e.g., Your Free Weekly Training Inside! 🚀"
-                value={campaignSubject}
-                onChange={(e) => setCampaignSubject(e.target.value)}
-                className="w-full text-xs py-2.5 px-3 bg-zinc-50 border border-zinc-200 rounded-lg text-zinc-800 font-medium"
-                required
-              />
-            </div>
-
-            <div className="space-y-1.5">
-              <div className="flex justify-between items-center">
-                <label className="text-[11px] font-bold text-zinc-500 uppercase">HTML Campaign Content</label>
-                <span className="text-[10px] text-zinc-400 font-medium">Placeholders supported: <code>{"{{name}}"}</code>, <code>{"{{email}}"}</code></span>
-              </div>
-              <textarea
-                rows={11}
-                value={campaignHtml}
-                onChange={(e) => setCampaignHtml(e.target.value)}
-                className="w-full text-xs p-3 bg-zinc-900 text-indigo-300 font-mono rounded-lg border border-zinc-800 focus:outline-hidden"
-              />
-            </div>
-
-            <button
-              type="submit"
-              disabled={isLoading}
-              className="px-5 py-2.5 bg-zinc-900 hover:bg-zinc-850 text-white font-semibold text-xs rounded-lg flex items-center gap-1.5 cursor-pointer disabled:opacity-50 transition-all active:scale-95 duration-100"
-            >
-              {isLoading ? (
-                <>
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" /> Discharging Broadcast...
-                </>
-              ) : (
-                <>
-                  <Send className="w-3.5 h-3.5" /> Dispatch Campaign
-                </>
+                  <div className="flex justify-between items-center">
+                    <button
+                      type="button"
+                      onClick={() => setShowTextToHtml(false)}
+                      className="text-[10px] font-bold text-indigo-700 hover:underline cursor-pointer"
+                    >
+                      Dismiss
+                    </button>
+                    <button
+                      type="button"
+                      disabled={aiConvertingText}
+                      onClick={() => handleTextToHtmlConversion('campaign')}
+                      className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-[11px] rounded-md flex items-center gap-1 cursor-pointer disabled:opacity-50"
+                    >
+                      {aiConvertingText ? (
+                        <>
+                          <Loader2 className="w-3 h-3 animate-spin" /> Structuring HTML...
+                        </>
+                      ) : (
+                        <>
+                          <Sparkles className="w-3 h-3" /> Transform Text with AI
+                        </>
+                      )}
+                    </button>
+                  </div>
+                  {aiTextError && <p className="text-[11px] text-rose-600 font-semibold">⚠️ {aiTextError}</p>}
+                </div>
               )}
-            </button>
 
-            {campaignStatus && (
-              <div className={`p-4 rounded-lg flex items-start gap-2.5 border text-xs leading-relaxed animate-fade-in ${campaignStatus.success ? 'bg-emerald-50 border-emerald-100 text-emerald-800' : 'bg-rose-50 border-rose-100 text-rose-800'}`}>
-                {campaignStatus.success ? <CheckCircle className="w-4 h-4 shrink-0 mt-0.5" /> : <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />}
-                <div>
-                  <p className="font-bold">{campaignStatus.success ? 'Outbound Dispatch Completed' : 'Transmission Failed'}</p>
-                  <p className="mt-0.5">{campaignStatus.msg}</p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-bold text-zinc-500 uppercase">Brand Sender Profile</label>
+                  <select
+                    value={campaignSiteKey}
+                    onChange={(e) => setCampaignSiteKey(e.target.value)}
+                    className="w-full text-xs py-2.5 px-3 bg-zinc-50 border border-zinc-200 rounded-lg text-zinc-800 font-medium"
+                  >
+                    <option value="cyvisahelp">CY Visa Help (hello@cyvisahelp.com)</option>
+                    <option value="cybarprep">CY Bar Prep (support@cybarprep.com)</option>
+                    <option value="cylawtech">CY Law Tech (hello@cylawtech.com)</option>
+                  </select>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-bold text-zinc-500 uppercase">Target Audience</label>
+                  <select
+                    value={campaignTarget}
+                    onChange={(e) => setCampaignTarget(e.target.value as any)}
+                    className="w-full text-xs py-2.5 px-3 bg-zinc-50 border border-zinc-200 rounded-lg text-zinc-800 font-medium cursor-pointer"
+                  >
+                    <option value="all">Active brand property subscribers (automated segmentation)</option>
+                    <option value="custom">Manual target list (custom comma-separated addresses)</option>
+                  </select>
                 </div>
               </div>
-            )}
-          </form>
+
+              {campaignTarget === 'custom' && (
+                <div className="space-y-1.5 animate-fade-in">
+                  <label className="text-[11px] font-bold text-zinc-500 uppercase">Target Recipients Addresses</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. testing1@domain.com, testing2@domain.com"
+                    value={campaignCustomEmails}
+                    onChange={(e) => setCampaignCustomEmails(e.target.value)}
+                    className="w-full text-xs py-2.5 px-3 bg-zinc-50 border border-zinc-200 rounded-lg text-zinc-800 font-medium"
+                  />
+                </div>
+              )}
+
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-bold text-zinc-500 uppercase">Outbound Subject Line</label>
+                <input
+                  type="text"
+                  placeholder="e.g., Your Free Weekly Training Inside! 🚀"
+                  value={campaignSubject}
+                  onChange={(e) => setCampaignSubject(e.target.value)}
+                  className="w-full text-xs py-2.5 px-3 bg-zinc-50 border border-zinc-200 rounded-lg text-zinc-800 font-medium"
+                  required
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <div className="flex justify-between items-center">
+                  <label className="text-[11px] font-bold text-zinc-500 uppercase">HTML Campaign Content</label>
+                  <span className="text-[10px] text-zinc-400 font-medium">Placeholders supported: <code>{"{{name}}"}</code>, <code>{"{{email}}"}</code></span>
+                </div>
+                <textarea
+                  rows={13}
+                  value={campaignHtml}
+                  onChange={(e) => setCampaignHtml(e.target.value)}
+                  className="w-full text-xs p-3 bg-zinc-900 text-indigo-300 font-mono rounded-lg border border-zinc-800 focus:outline-hidden"
+                />
+              </div>
+
+              <button
+                type="submit"
+                disabled={isLoading}
+                className="px-5 py-2.5 bg-zinc-900 hover:bg-zinc-850 text-white font-semibold text-xs rounded-lg flex items-center gap-1.5 cursor-pointer disabled:opacity-50 transition-all active:scale-95 duration-100"
+              >
+                {isLoading ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" /> Discharging Broadcast...
+                  </>
+                ) : (
+                  <>
+                    <Send className="w-3.5 h-3.5" /> Dispatch Campaign
+                  </>
+                )}
+              </button>
+
+              {campaignStatus && (
+                <div className={`p-4 rounded-lg flex items-start gap-2.5 border text-xs leading-relaxed animate-fade-in ${campaignStatus.success ? 'bg-emerald-50 border-emerald-100 text-emerald-800' : 'bg-rose-50 border-rose-100 text-rose-800'}`}>
+                  {campaignStatus.success ? <CheckCircle className="w-4 h-4 shrink-0 mt-0.5" /> : <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />}
+                  <div>
+                    <p className="font-bold">{campaignStatus.success ? 'Outbound Dispatch Completed' : 'Transmission Failed'}</p>
+                    <p className="mt-0.5">{campaignStatus.msg}</p>
+                  </div>
+                </div>
+              )}
+            </form>
+
+            {/* Save Draft Layout to Brand Template Library Panel */}
+            <div className="bg-white border border-zinc-200 rounded-xl p-5 shadow-xs space-y-4">
+              <div className="flex items-center gap-2 pb-2.5 border-b border-zinc-100">
+                <Save className="w-4 h-4 text-indigo-650 text-indigo-600" />
+                <h4 className="font-bold text-xs text-zinc-850 uppercase">Save Blueprint to Library</h4>
+              </div>
+              <p className="text-[11px] text-zinc-500 leading-relaxed">
+                Save your constructed email campaign designs into your persistent templates library to quickly reuse them across channels anytime.
+              </p>
+              
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-zinc-500 uppercase">Layout Template Name</label>
+                <input
+                  type="text"
+                  placeholder="e.g. August Visa Bulletin Update Template"
+                  value={saveTemplateName}
+                  onChange={(e) => setSaveTemplateName(e.target.value)}
+                  className="w-full text-xs p-2 bg-zinc-50 border border-zinc-200 rounded focus:outline-hidden focus:bg-white transition-all font-medium"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-zinc-500 uppercase">Short Description</label>
+                <input
+                  type="text"
+                  placeholder="e.g. High contrast gold accents and custom CTA links"
+                  value={saveTemplateDesc}
+                  onChange={(e) => setSaveTemplateDesc(e.target.value)}
+                  className="w-full text-xs p-2 bg-zinc-50 border border-zinc-200 rounded focus:outline-hidden focus:bg-white transition-all"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-zinc-500 uppercase">Aesthetic Profile Category</label>
+                <select
+                  value={saveTemplateCategory}
+                  onChange={(e) => setSaveTemplateCategory(e.target.value as any)}
+                  className="w-full text-xs p-2 bg-zinc-50 border border-zinc-200 rounded font-medium cursor-pointer"
+                >
+                  <option value="general">Standard Newsletter Draft</option>
+                  <option value="reference">Brand Reference Profile (Aesthetic Blueprint)</option>
+                </select>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => handleSaveToLibrary('campaign')}
+                className="w-full py-2 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 font-bold text-xs rounded-lg transition-all cursor-pointer border border-zinc-300 shadow-xs"
+              >
+                💾 Save Layout Blueprint
+              </button>
+
+              {saveTemplateStatus && (
+                <p className="text-[11px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-150 p-2.5 rounded text-center">
+                  {saveTemplateStatus}
+                </p>
+              )}
+            </div>
+          </div>
         )}
 
         {activeTab === 'welcome' && (
@@ -377,17 +648,27 @@ export default function EmailCenter() {
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2">
-                  <span className="text-[11px] font-bold text-zinc-500 uppercase whitespace-nowrap">SITE CONTEXT:</span>
-                  <select
-                    value={welcomeSiteKey}
-                    onChange={(e) => setWelcomeSiteKey(e.target.value)}
-                    className="text-xs py-1.5 px-2.5 bg-zinc-50 border border-zinc-200 rounded-md text-zinc-850 font-bold cursor-pointer"
+                <div className="flex items-center gap-4">
+                  <button
+                    type="button"
+                    onClick={() => setShowTextToHtml(!showTextToHtml)}
+                    className="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 border border-indigo-100 text-indigo-700 rounded text-[10px] font-bold flex items-center gap-1 cursor-pointer transition-all"
                   >
-                    <option value="cyvisahelp">CY Visa Help</option>
-                    <option value="cybarprep">CY Bar Prep</option>
-                    <option value="cylawtech">CY Law Tech</option>
-                  </select>
+                    <Sparkles className="w-3 h-3 text-indigo-600 animate-pulse" /> ✨ Convert Text to HTML with AI
+                  </button>
+
+                  <div className="flex items-center gap-2">
+                    <span className="text-[11px] font-bold text-zinc-500 uppercase whitespace-nowrap">SITE CONTEXT:</span>
+                    <select
+                      value={welcomeSiteKey}
+                      onChange={(e) => setWelcomeSiteKey(e.target.value)}
+                      className="text-xs py-1.5 px-2.5 bg-zinc-50 border border-zinc-200 rounded-md text-zinc-850 font-bold cursor-pointer"
+                    >
+                      <option value="cyvisahelp">CY Visa Help</option>
+                      <option value="cybarprep">CY Bar Prep</option>
+                      <option value="cylawtech">CY Law Tech</option>
+                    </select>
+                  </div>
                 </div>
               </div>
 
@@ -400,6 +681,68 @@ export default function EmailCenter() {
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                   {/* Edit Column */}
                   <div className="space-y-4">
+                    {/* Text-to-HTML AI Converter Panel */}
+                    {showTextToHtml && (
+                      <div className="p-4 bg-indigo-50/40 border border-indigo-100 rounded-lg space-y-3 animate-slide-down">
+                        <div className="flex items-center gap-2">
+                          <Sparkles className="w-4 h-4 text-indigo-600 animate-pulse" />
+                          <h4 className="font-bold text-xs text-indigo-900">Convert Plain Text → Branded Onboarding HTML</h4>
+                        </div>
+                        <p className="text-[11px] text-zinc-650 leading-relaxed">
+                          Paste your raw onboarding or checklist copy. Gemini AI will wrap it inside the gorgeous layout styling that matches the selected brand property context.
+                        </p>
+                        
+                        <div className="space-y-1">
+                          <label className="text-[10px] font-bold text-indigo-750 uppercase">Subject Line (Welcome Email)</label>
+                          <input
+                            type="text"
+                            placeholder="e.g. Welcome to CyAzor! Your secure guide has arrived."
+                            value={textToHtmlSubject}
+                            onChange={(e) => setTextToHtmlSubject(e.target.value)}
+                            className="w-full text-xs p-2 bg-white border border-indigo-100 rounded focus:outline-hidden"
+                          />
+                        </div>
+
+                        <div className="space-y-1">
+                          <label className="text-[10px] font-bold text-indigo-750 uppercase">Raw Text notes</label>
+                          <textarea
+                            rows={6}
+                            placeholder="Onboarding intro. Link to files."
+                            value={rawTextNotes}
+                            onChange={(e) => setRawTextNotes(e.target.value)}
+                            className="w-full text-xs p-2.5 bg-white border border-indigo-100 rounded focus:outline-hidden text-zinc-800"
+                          />
+                        </div>
+
+                        <div className="flex justify-between items-center">
+                          <button
+                            type="button"
+                            onClick={() => setShowTextToHtml(false)}
+                            className="text-[10px] font-bold text-indigo-700 hover:underline cursor-pointer"
+                          >
+                            Dismiss
+                          </button>
+                          <button
+                            type="button"
+                            disabled={aiConvertingText}
+                            onClick={() => handleTextToHtmlConversion('welcome')}
+                            className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-[11px] rounded-md flex items-center gap-1 cursor-pointer"
+                          >
+                            {aiConvertingText ? (
+                              <>
+                                <Loader2 className="w-3 h-3 animate-spin" /> Structuring HTML...
+                              </>
+                            ) : (
+                              <>
+                                <Sparkles className="w-3 h-3" /> Transform Text with AI
+                              </>
+                            )}
+                          </button>
+                        </div>
+                        {aiTextError && <p className="text-[11px] text-rose-600 font-semibold">⚠️ {aiTextError}</p>}
+                      </div>
+                    )}
+
                     <div className="space-y-1.5">
                       <label className="text-[11px] font-bold text-zinc-500 uppercase">Automation Subject Line</label>
                       <input
@@ -418,7 +761,7 @@ export default function EmailCenter() {
                           onClick={() => setShowAiMimic(!showAiMimic)}
                           className="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 border border-indigo-100 text-indigo-700 rounded text-[10px] font-bold flex items-center gap-1 cursor-pointer transition-all active:scale-95"
                         >
-                          <Sparkles className="w-3 h-3 text-indigo-600 animate-pulse" /> ✨ Gemini Brand Mimic Engine
+                          <Sparkles className="w-3 h-3 text-indigo-600 animate-pulse" /> ✨ Gemini Layout Style Mimic
                         </button>
                       </div>
 
@@ -429,7 +772,7 @@ export default function EmailCenter() {
                             <Sparkles className="w-4 h-4 text-indigo-600" />
                             <h4 className="font-bold text-xs text-indigo-900">AI-Powered Layout Blueprint Mimic</h4>
                           </div>
-                          <p className="text-[11px] text-zinc-600 leading-relaxed">
+                          <p className="text-[11px] text-zinc-650 leading-relaxed">
                             Paste any reference HTML (from templates, competitor emails, or websites). Gemini AI will capture the exact styles, background colors, and margins, and regenerate a beautiful, fully customized, responsive email matching the selected brand identity.
                           </p>
                           <div className="space-y-1">
@@ -499,13 +842,15 @@ export default function EmailCenter() {
                       <span className="text-[11px] text-zinc-500">
                         Activation applies custom layouts across signup endpoints instantly.
                       </span>
-                      <button
-                        type="button"
-                        onClick={handleSaveWelcomeTemplate}
-                        className="px-4 py-2 bg-zinc-900 hover:bg-zinc-850 text-white font-semibold text-xs rounded-lg cursor-pointer"
-                      >
-                        Activate & Activate Layout
-                      </button>
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => handleSaveWelcomeTemplate()}
+                          className="px-4 py-2 bg-zinc-900 hover:bg-zinc-850 text-white font-semibold text-xs rounded-lg cursor-pointer transition-all shadow-xs"
+                        >
+                          Activate Onboarding flow
+                        </button>
+                      </div>
                     </div>
 
                     {welcomeSaveStatus && (
@@ -559,6 +904,103 @@ export default function EmailCenter() {
                       </div>
                     )}
                   </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Saved Templates Library Tab Component UI */}
+        {activeTab === 'library' && (
+          <div className="space-y-6 max-w-7xl animate-fade-in">
+            <div className="bg-white border border-zinc-200 rounded-xl p-6 shadow-xs space-y-5">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-3 border-b border-zinc-150">
+                <div className="flex gap-2.5 items-center">
+                  <FolderOpen className="w-5 h-5 text-indigo-600" />
+                  <div>
+                    <h3 className="font-bold text-sm text-zinc-900">Branded Templates Library Repository</h3>
+                    <p className="text-xs text-zinc-500 mt-0.5">Explore, manage, load, and test reusable email layouts and custom structures.</p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] font-bold text-zinc-500 uppercase">FILTER BRAND:</span>
+                  <select
+                    value={librarySiteKey}
+                    onChange={(e) => setLibrarySiteKey(e.target.value)}
+                    className="text-xs py-1.5 px-3 bg-zinc-50 border border-zinc-200 rounded-md text-zinc-850 font-bold cursor-pointer focus:outline-hidden"
+                  >
+                    <option value="cyvisahelp">CY Visa Help</option>
+                    <option value="cybarprep">CY Bar Prep</option>
+                    <option value="cylawtech">CY Law Tech</option>
+                  </select>
+                </div>
+              </div>
+
+              {libraryLoading ? (
+                <div className="py-16 text-center text-zinc-400 text-xs flex flex-col items-center justify-center gap-2">
+                  <Loader2 className="w-5 h-5 animate-spin text-indigo-600" />
+                  <span>Fetching library elements...</span>
+                </div>
+              ) : libraryTemplates.length === 0 ? (
+                <div className="py-16 text-center text-zinc-400 space-y-3.5 max-w-md mx-auto">
+                  <FileText className="w-10 h-10 text-zinc-300 mx-auto" />
+                  <div>
+                    <p className="font-bold text-zinc-700">Your Templates Library is Empty</p>
+                    <p className="text-xs text-zinc-400 mt-1 leading-relaxed">
+                      Save drafts directly from your Onboarding Workspace or Campaign Send panels to view reusable layout cards here.
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {libraryTemplates.map((tpl) => (
+                    <div key={tpl.id} className="border border-zinc-200 rounded-xl bg-zinc-50/30 overflow-hidden flex flex-col justify-between hover:shadow-md transition-all group">
+                      <div className="p-4 space-y-2">
+                        <div className="flex items-start justify-between">
+                          <span className={`px-2.5 py-1 text-[10px] font-bold uppercase rounded ${tpl.category === 'reference' ? 'bg-indigo-50 text-indigo-700 border border-indigo-100' : 'bg-zinc-100 text-zinc-700'}`}>
+                            {tpl.category === 'reference' ? 'Aesthetic Profile' : 'Newsletter Sample'}
+                          </span>
+                          
+                          <button
+                            onClick={() => handleDeleteTemplateFromLibrary(tpl.id)}
+                            className="p-1 hover:bg-rose-50 rounded text-zinc-400 hover:text-rose-600 transition-colors cursor-pointer"
+                            title="Delete template"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+
+                        <h4 className="font-bold text-xs text-zinc-900 group-hover:text-indigo-600 transition-colors truncate">{tpl.name}</h4>
+                        <p className="text-[11px] text-zinc-400 leading-relaxed line-clamp-2 h-8">{tpl.description || 'No description provided.'}</p>
+                        <p className="text-[9px] text-zinc-400 font-mono">Saved: {new Date(tpl.created_at).toLocaleString()}</p>
+                      </div>
+
+                      {/* Side Actions Drawer */}
+                      <div className="p-3 bg-zinc-50 border-t border-zinc-150 grid grid-cols-2 gap-2 text-center">
+                        <button
+                          onClick={() => {
+                            setCampaignHtml(tpl.html_content);
+                            setActiveTab('send');
+                            alert('Template blueprint successfully loaded into the Campaign Editor!');
+                          }}
+                          className="py-1.5 bg-white hover:bg-zinc-100 border border-zinc-200 text-zinc-700 font-bold text-[10px] rounded transition-all cursor-pointer shadow-xs"
+                        >
+                          Load to Campaign
+                        </button>
+                        <button
+                          onClick={() => {
+                            setWelcomeBody(tpl.html_content);
+                            setActiveTab('welcome');
+                            alert('Template blueprint successfully loaded into the Welcome Automation Panel!');
+                          }}
+                          className="py-1.5 bg-zinc-900 hover:bg-zinc-800 text-white font-bold text-[10px] rounded transition-all cursor-pointer shadow-xs"
+                        >
+                          Load to Onboarding
+                        </button>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               )}
             </div>
