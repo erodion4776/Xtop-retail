@@ -9,10 +9,10 @@ export async function sendEmail({ siteKey, to, templateName, variables }: { site
     const config = getSiteConfig(siteKey);
     if (!config) throw new Error(`Invalid siteKey: ${siteKey}`);
 
-    // Fetch tenant from DB
+    // Fetch corresponding tenant from Supabase DB
     const { data: tenant } = await supabaseAdmin.from('tenants').select('id').eq('site_key', siteKey).single();
     
-    // 2. Fetch template from DB or use elegant fallback
+    // 2. Fetch template from DB or use our high-contrast fallback layouts
     let template: { subject: string; html_content: string; text_content: string } | null = null;
     
     if (tenant) {
@@ -26,7 +26,7 @@ export async function sendEmail({ siteKey, to, templateName, variables }: { site
     }
         
     if (!template) {
-        // Fallback templates dynamically rendered
+        // Fallback templates dynamically rendered when no custom template exists in the DB
         if (templateName === 'welcome') {
             if (siteKey === 'cyvisahelp') {
                 template = {
@@ -84,7 +84,7 @@ export async function sendEmail({ siteKey, to, templateName, variables }: { site
               </p>
               
               <p style="font-size: 15px; color: #475569; line-height: 1.6; margin: 0 0 20px 0;">
-                Thank you for connecting with the <strong>CyAzor Digital Law Academy</strong>. We are an educational LawTech platform operating at the intersection of expertise, strategy, and modern technology. Our mission is to take complex navigation procedures and simplify them into clear, structured, and manageable steps.
+                Thank you for connecting with the <strong>CyAzor Digital Law Academy</strong>. We simplify complex immigration procedures into clear, manageable steps.
               </p>
               
               <p style="font-size: 15px; color: #475569; line-height: 1.6; margin: 0 0 30px 0;">
@@ -248,7 +248,7 @@ export async function sendEmail({ siteKey, to, templateName, variables }: { site
           <tr>
             <td style="padding: 45px 40px 30px 40px;">
               <p style="font-size: 15px; color: #334155; line-height: 1.6;">Hello {{name}},</p>
-              <p style="font-size: 15px; color: #334155; line-height: 1.6;">Welcome to <strong>CY Law Tech</strong>! We are excited to have you on board with our network of modern legal engineers, software architects, and practitioners.</p>
+              <p style="font-size: 15px; color: #334155; line-height: 1.6;">Welcome to <strong>CY Law Tech</strong>! We are excited to have you on board with our network of modern legal engineers.</p>
               <p style="font-size: 15px; color: #334155; line-height: 1.6;">As requested, we have prepared our premium Automation Checklist guiding code/document integration pipelines designed for high scalability.</p>
               <div style="text-align: center; margin: 35px 0;">
                 <a href="https://cylawtech.com/checklist" target="_blank" style="background-color: #1D4ED8; color: #FFFFFF; text-decoration: none; padding: 14px 28px; font-size: 13px; font-weight: bold; border-radius: 8px; letter-spacing: 1px; display: inline-block; text-transform: uppercase;">Get Checklist Booklet</a>
@@ -271,8 +271,8 @@ export async function sendEmail({ siteKey, to, templateName, variables }: { site
             } else {
                 template = {
                     subject: 'Welcome to our newsletter! 🎉',
-                    html_content: '<h3>Welcome aboard!</h3><p>Hi {{name}},</p><p>Thank you for subscribing to our updates. We are excited to have you on board!</p><p>We will keep you updated with the latest news, tutorials, and exclusive highlights.</p>',
-                    text_content: 'Welcome! Thank you for subscribing. We will keep you updated with the latest news.'
+                    html_content: '<h3>Welcome aboard!</h3><p>Hi {{name}},</p><p>Thank you for subscribing to our updates. We are excited to have you on board!</p>',
+                    text_content: 'Welcome! Thank you for subscribing.'
                 };
             }
         } else {
@@ -287,70 +287,71 @@ export async function sendEmail({ siteKey, to, templateName, variables }: { site
     // 3. Render Template
     const rendered = renderTemplate(template, siteKey, variables);
 
-    // 4. Determine Sender Address (Support verified domains with fallback support utilizing one sending domain)
-    let baseDomain = 'cylawtech.com'; // Default verified sandbox domain
-    const defaultSender = process.env.SENDER_EMAIL || 'hello@cylawtech.com';
-    if (defaultSender && defaultSender.includes('@')) {
-        baseDomain = defaultSender.split('@')[1];
-    }
+    // 4. Create Initial Pending Outbound Log Entry and get UUID
+    const loggedRecord = await logEmail(to, rendered.subject, rendered.text, templateName, 'pending');
+    const logId = loggedRecord?.id || 'sandbox_id_' + Date.now();
 
+    // 5. Inject a secure live tracking pixel into the rendered HTML body
+    const appUrl = process.env.APP_URL || 'http://localhost:3000';
+    const trackingPixelImg = `<img src="${appUrl}/api/track/open/${logId}" width="1" height="1" alt="" style="display:none !important;" />`;
+    const finalHtmlBody = rendered.html + trackingPixelImg;
+
+    // 6. Determine Sender Credentials
+    const defaultSender = process.env.SENDER_EMAIL || 'hello@cylawtech.com';
     let senderName = config.senderName;
-    // To guarantee delivery to live mailboxes, use the verified SENDER_EMAIL directly.
-    // This supports single-sender verification formats of Resend gracefully.
     let senderEmail = defaultSender;
     let replyTo = `support@${siteKey}.com`;
 
-    // Allow fine-grained override via environment variables if desired
+    // Allow fine-grained override via environment variables
     const customSenderEmail = process.env[`SENDER_EMAIL_${siteKey.toUpperCase()}`];
     const customSenderName = process.env[`SENDER_NAME_${siteKey.toUpperCase()}`];
     const customReplyTo = process.env[`REPLY_TO_EMAIL_${siteKey.toUpperCase()}`];
 
-    if (customSenderEmail) {
-        senderEmail = customSenderEmail;
-    }
-    if (customSenderName) {
-        senderName = customSenderName;
-    }
-    if (customReplyTo) {
-        replyTo = customReplyTo;
-    }
+    if (customSenderEmail) senderEmail = customSenderEmail;
+    if (customSenderName) senderName = customSenderName;
+    if (customReplyTo) replyTo = customReplyTo;
 
     const fromAddress = `"${senderName}" <${senderEmail}>`;
 
-    // 5. Send via Resend with auto-retry on temporary rate limits or socket failure
+    // 7. Send via Resend with auto-retry
     try {
         await retryOperation(() => getResend().emails.send({
             from: fromAddress,
             to,
             subject: rendered.subject,
-            html: rendered.html,
+            html: finalHtmlBody,
             text: rendered.text,
             replyTo: replyTo,
             headers: {
                 'List-Unsubscribe': `<https://${siteKey}.com/unsubscribe?email=${encodeURIComponent(to)}>`,
-                'X-Entity-ID': `${siteKey}-${Date.now()}`
+                'X-Entity-ID': logId
             }
         }));
-        await logEmail(to, rendered.subject, rendered.text, templateName, 'sent');
+
+        // Update database log status to 'sent'
+        await supabaseAdmin.from('email_logs').update({ status: 'sent' }).eq('id', logId);
     } catch (resendErr: any) {
         console.warn(`Attempting send with ${senderEmail} failed, falling back to onboarding@resend.dev...`, resendErr.message);
-        // Fallback for unverified system testing
         try {
             await retryOperation(() => getResend().emails.send({
                 from: `onboarding@resend.dev`,
                 to,
                 subject: rendered.subject,
-                html: rendered.html,
+                html: finalHtmlBody,
                 text: rendered.text,
                 replyTo: replyTo,
                 headers: {
                     'List-Unsubscribe': `<https://${siteKey}.com/unsubscribe?email=${encodeURIComponent(to)}>`
                 }
             }));
-            await logEmail(to, rendered.subject, rendered.text, templateName, 'sent');
+            
+            // Mark as sent via sandbox onboarding
+            await supabaseAdmin.from('email_logs').update({ status: 'sent' }).eq('id', logId);
         } catch (fallbackErr: any) {
             console.error("Critical: Fallback email send failed as well:", fallbackErr.message);
-            await logEmail(to, rendered.subject, rendered.text, templateName, 'failed');
+            
+            // Mark status as failed in database log
+            await supabaseAdmin.from('email_logs').update({ status: 'failed' }).eq('id', logId);
             throw fallbackErr;
         }
     }
