@@ -14,17 +14,18 @@ export interface Campaign {
   subject: string;
   status: 'draft' | 'scheduled' | 'sent' | 'sending';
   sent_count: number;
-  open_rate: number; // e.g., 24.5 for 24.5%
-  click_rate: number; // e.g., 3.2 for 3.2%
+  open_rate: number;
+  click_rate: number;
   date_created: string;
 }
 
 export interface RecentActivity {
   id: string;
-  type: 'subscriber_join' | 'campaign_sent' | 'campaign_created' | 'domain_verified';
+  type: 'subscriber_join' | 'campaign_sent' | 'campaign_created' | 'domain_verified' | 'email_read' | 'email_bounced';
   title: string;
   detail: string;
   timestamp: string;
+  rawDate?: string;
 }
 
 export type ActiveTab = 'dashboard' | 'subscribers' | 'settings' | 'email-center';
