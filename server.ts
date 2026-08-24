@@ -30,7 +30,7 @@ function addDebugLog(type: string, message: string) {
     console.log(`[DEBUG/${type}] ${message}`);
 }
 
-// CyBarPrep signature template - the reference DNA for AI generations
+// ===== EXACT MASTER BLUEPRINT DNA (CyBarPrep Template) =====
 const CYBARPREP_REFERENCE_TEMPLATE = `<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
 <html xmlns="http://www.w3.org/1999/xhtml" lang="en">
 <head>
@@ -43,7 +43,7 @@ const CYBARPREP_REFERENCE_TEMPLATE = `<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1
     img { -ms-interpolation-mode: bicubic; border: 0; height: auto; line-height: 100%; outline: none; text-decoration: none; }
     table { border-collapse: collapse !important; }
     body { height: 100% !important; margin: 0 !important; padding: 0 !important; width: 100% !important; background-color: #f8fafc; }
-    a[x-apple-data-detectors] { color: inherit !important; text-decoration: none !important; }
+    a[x-apple-data-detectors] { color: inherit !important; text-decoration: none !important; font-size: inherit !important; font-family: inherit !important; font-weight: inherit !important; line-height: inherit !important; }
     .btn-hover:hover { background-color: #9A7007 !important; }
     .btn-outline-hover:hover { background-color: #1e293b !important; }
     .link-hover:hover { text-decoration: underline !important; color: #9A7007 !important; }
@@ -52,64 +52,211 @@ const CYBARPREP_REFERENCE_TEMPLATE = `<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1
 <body style="margin: 0; padding: 0; background-color: #f8fafc; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
   <table border="0" cellpadding="0" cellspacing="0" width="100%">
     <tr>
-      <td bgcolor="#f8fafc" align="center" style="padding: 40px 10px;">
+      <td bgcolor="#f8fafc" align="center" style="padding: 40px 10px 40px 10px;">
         <table border="0" cellpadding="0" cellspacing="0" width="100%" style="max-width: 600px; background-color: #ffffff; border-radius: 12px; overflow: hidden; border: 1px solid #e2e8f0; box-shadow: 0 4px 12px rgba(15, 23, 42, 0.05);">
+          
+          <!-- BRAND HEADER -->
           <tr>
             <td bgcolor="#0f172a" align="center" style="padding: 35px 20px; border-bottom: 4px solid #B8860B;">
-              <span style="font-size: 26px; font-weight: 800; letter-spacing: -0.5px; color: #ffffff;">CyAzor <span style="color: #B8860B;">LawTech Solutions</span></span>
-              <div style="padding-top: 6px;"><span style="font-size: 11px; font-weight: 600; letter-spacing: 2px; color: #94a3b8; text-transform: uppercase;">Cross-Border Legal Conversations</span></div>
-            </td>
-          </tr>
-          <tr>
-            <td style="padding: 40px 40px 25px 40px;">
-              <span style="font-size: 12px; font-weight: 700; color: #B8860B; letter-spacing: 1.5px; text-transform: uppercase;">{{category}}</span>
-              <h1 style="margin: 15px 0; font-size: 24px; font-weight: 800; line-height: 1.3; color: #0f172a; letter-spacing: -0.5px; text-transform: uppercase;">{{headline}}</h1>
-              <p style="margin: 0; font-size: 14px; color: #64748b; font-weight: 500; border-bottom: 1px solid #e2e8f0; padding-bottom: 25px;">By <strong style="color: #0f172a;">Atty. Cynthia Azor</strong> &bull; US Immigration Lawyer</p>
-            </td>
-          </tr>
-          <tr>
-            <td style="padding: 0 40px 30px 40px;">
-              <table border="0" cellpadding="0" cellspacing="0" width="100%" bgcolor="#f1f5f9" style="border-radius: 8px; border-left: 4px solid #B8860B;">
-                <tr><td style="padding: 22px 25px;">
-                  <p style="margin: 0 0 10px 0; font-size: 16px; font-weight: 700; color: #0f172a;">Dear {{name}},</p>
-                  <p style="margin: 0; font-size: 15px; line-height: 1.6; color: #334155; font-weight: 500;">{{intro}}</p>
-                </td></tr>
+              <table border="0" cellpadding="0" cellspacing="0" width="100%">
+                <tr>
+                  <td align="center">
+                    <span style="font-size: 26px; font-weight: 800; letter-spacing: -0.5px; color: #ffffff; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
+                      CyAzor <span style="color: #B8860B;">LawTech Solutions</span>
+                    </span>
+                  </td>
+                </tr>
+                <tr>
+                  <td align="center" style="padding-top: 6px;">
+                    <span style="font-size: 11px; font-weight: 600; letter-spacing: 2px; color: #94a3b8; text-transform: uppercase;">
+                      Cross-Border Legal Conversations
+                    </span>
+                  </td>
+                </tr>
               </table>
             </td>
           </tr>
-          <tr><td style="padding: 0 40px 30px 40px;">{{content_blocks}}</td></tr>
+
+          <!-- HERO SECTION -->
+          <tr>
+            <td align="left" style="padding: 40px 40px 25px 40px;">
+              <table border="0" cellpadding="0" cellspacing="0" width="100%">
+                <tr>
+                  <td align="left" style="padding-bottom: 8px;">
+                    <span style="font-size: 12px; font-weight: 700; color: #B8860B; letter-spacing: 1.5px; text-transform: uppercase;">
+                      {{category_badge}}
+                    </span>
+                  </td>
+                </tr>
+                <tr>
+                  <td align="left" style="padding-bottom: 15px;">
+                    <h1 style="margin: 0; font-size: 24px; font-weight: 800; line-height: 1.3; color: #0f172a; letter-spacing: -0.5px; text-transform: uppercase;">
+                      {{headline}}
+                    </h1>
+                  </td>
+                </tr>
+                <tr>
+                  <td align="left" style="border-bottom: 1px solid #e2e8f0; padding-bottom: 25px;">
+                    <p style="margin: 0; font-size: 14px; color: #64748b; font-weight: 500;">
+                      By <strong style="color: #0f172a;">Atty. Cynthia Azor</strong> &bull; US Immigration Lawyer
+                    </p>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- INTRO CARD -->
+          <tr>
+            <td align="left" style="padding: 0 40px 30px 40px;">
+              <table border="0" cellpadding="0" cellspacing="0" width="100%" bgcolor="#f1f5f9" style="border-radius: 8px; border-left: 4px solid #B8860B;">
+                <tr>
+                  <td style="padding: 22px 25px;">
+                    <p style="margin: 0 0 10px 0; font-size: 16px; font-weight: 700; color: #0f172a;">
+                      Dear {{name}},
+                    </p>
+                    <p style="margin: 0; font-size: 15px; line-height: 1.6; color: #334155; font-weight: 500;">
+                      {{intro_paragraph}}
+                    </p>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- STRATEGIC UPDATES -->
+          <tr>
+            <td align="left" style="padding: 0 40px 10px 40px;">
+              <table border="0" cellpadding="0" cellspacing="0" width="100%">
+                {{strategic_updates_rows}}
+              </table>
+            </td>
+          </tr>
+
+          <!-- IMMIGRATION TIP SECTION -->
           <tr>
             <td align="center" style="padding: 10px 40px 30px 40px;">
-              <table border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #0f172a; border-radius: 8px; overflow: hidden;">
-                <tr><td style="padding: 35px 25px; text-align: center;">
-                  <h3 style="margin: 0 0 10px 0; font-size: 18px; font-weight: 700; color: #ffffff;">Need Case-Specific Guidance?</h3>
-                  <p style="margin: 0 0 25px 0; font-size: 14px; line-height: 1.6; color: #94a3b8;">Stay informed. Stay prepared. Know your options. 🇺🇸⚖️<br />Book a legal consultation today.</p>
-                  <a href="http://www.cybarcoach.com" target="_blank" class="btn-outline-hover" style="display: inline-block; padding: 12px 24px; margin: 5px; font-size: 14px; font-weight: 700; color: #ffffff; text-decoration: none; border-radius: 6px; border: 1px solid #475569;">Visit Our Website</a>
-                  <a href="https://calendly.com/cynobas/bar-prep-strategy-with-cynthia-azor" target="_blank" class="btn-hover" style="display: inline-block; padding: 12px 24px; margin: 5px; font-size: 14px; font-weight: 700; color: #ffffff; background-color: #B8860B; text-decoration: none; border-radius: 6px; border: 1px solid #B8860B;">Book a Consultation</a>
-                </td></tr>
+              <table border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #fffbeb; border-radius: 8px; border: 1px solid #fde68a;">
+                <tr>
+                  <td style="padding: 25px;">
+                    <h3 style="margin: 0 0 10px 0; font-size: 16px; font-weight: 800; color: #92400e; text-transform: uppercase; letter-spacing: 1px;">
+                      {{tip_title}}
+                    </h3>
+                    <p style="margin: 0; font-size: 15px; line-height: 1.6; color: #92400e;">
+                      {{tip_paragraph}}
+                    </p>
+                  </td>
+                </tr>
               </table>
             </td>
           </tr>
+
+          <!-- CALL TO ACTION (CTA) -->
           <tr>
-            <td style="padding: 0 40px 40px 40px; border-bottom: 1px solid #e2e8f0;">
-              <p style="margin: 0 0 20px 0; font-size: 13px; font-style: italic; color: #64748b; line-height: 1.6;"><strong>Disclaimer:</strong> This newsletter is for general information and does not constitute legal advice.</p>
-              <p style="margin: 0 0 4px 0; font-size: 16px; font-weight: 800; color: #0f172a;">Atty. Cynthia Azor</p>
-              <p style="margin: 0 0 10px 0; font-size: 14px; font-weight: 600; color: #B8860B;">US Immigration Lawyer</p>
-              <p style="margin: 0 0 2px 0; font-size: 13px; font-weight: 700; color: #334155;">CY AZOR LAW TECH SOLUTIONS</p>
-              <p style="margin: 0; font-size: 12px; color: #64748b;">Immigration &bull; Legal Education &bull; Global Mobility</p>
+            <td align="center" style="padding: 10px 40px 30px 40px;">
+              <table border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #0f172a; border-radius: 8px; overflow: hidden; text-align: center;">
+                <tr>
+                  <td style="padding: 35px 25px;">
+                    <h3 style="margin: 0 0 10px 0; font-size: 18px; font-weight: 700; color: #ffffff;">
+                      Need Case-Specific Guidance?
+                    </h3>
+                    <p style="margin: 0 0 25px 0; font-size: 14px; line-height: 1.6; color: #94a3b8;">
+                      Stay informed. Stay prepared. Know your options. 🇺🇸⚖️<br />
+                      Book a legal consultation today to understand the best immigration pathway for you and your family.
+                    </p>
+                    <table border="0" cellpadding="0" cellspacing="0" align="center" width="100%">
+                      <tr>
+                        <td align="center">
+                          <!-- Button 1: Website -->
+                          <a href="http://www.cybarcoach.com" target="_blank" class="btn-outline-hover" style="display: inline-block; padding: 12px 24px; margin: 5px; font-size: 14px; font-weight: 700; color: #ffffff; text-decoration: none; border-radius: 6px; border: 1px solid #475569; transition: background-color 0.2s ease;">
+                            Visit Our Website
+                          </a>
+                          <!-- Button 2: Consultation -->
+                          <a href="https://calendly.com/cynobas/bar-prep-strategy-with-cynthia-azor" target="_blank" class="btn-hover" style="display: inline-block; padding: 12px 24px; margin: 5px; font-size: 14px; font-weight: 700; color: #ffffff; background-color: #B8860B; text-decoration: none; border-radius: 6px; border: 1px solid #B8860B; transition: background-color 0.2s ease;">
+                            Book a Consultation
+                          </a>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+              </table>
             </td>
           </tr>
+
+          <!-- DISCLAIMER & SIGN-OFF -->
           <tr>
-            <td align="center" bgcolor="#f8fafc" style="padding: 30px 20px;">
-              <p style="margin: 0 0 15px 0; font-size: 12px; color: #64748b;">You are receiving this update from <a href="http://www.cybarcoach.com" class="link-hover" style="color: #0f172a; text-decoration: none; font-weight: 600;">CyAzor Law Tech Solutions</a>.</p>
-              <p style="margin: 0 0 15px 0; font-size: 12px; color: #94a3b8;">&copy; 2026 CyAzor Law Tech Solutions. All rights reserved.</p>
-              <a href="http://www.cybarcoach.com" class="link-hover" style="font-size: 12px; color: #B8860B; text-decoration: none; font-weight: 600; padding: 0 8px;">Website</a>
-              <span style="color: #cbd5e1;">&bull;</span>
-              <a href="https://calendly.com/cynobas/bar-prep-strategy-with-cynthia-azor" class="link-hover" style="font-size: 12px; color: #B8860B; text-decoration: none; font-weight: 600; padding: 0 8px;">Consultation</a>
-              <span style="color: #cbd5e1;">&bull;</span>
-              <a href="#" class="link-hover" style="font-size: 12px; color: #64748b; text-decoration: none; font-weight: 500; padding: 0 8px;">Unsubscribe</a>
+            <td align="left" style="padding: 0 40px 40px 40px; border-bottom: 1px solid #e2e8f0;">
+              <table border="0" cellpadding="0" cellspacing="0" width="100%">
+                <tr>
+                  <td align="left" style="padding-bottom: 20px;">
+                    <p style="margin: 0; font-size: 13px; font-style: italic; color: #64748b; line-height: 1.6;">
+                      <strong>Disclaimer:</strong> This newsletter is for general information and does not constitute legal advice. Individual immigration cases require case-specific legal assessment.
+                    </p>
+                  </td>
+                </tr>
+                <tr>
+                  <td align="left">
+                    <p style="margin: 0 0 4px 0; font-size: 16px; font-weight: 800; color: #0f172a;">
+                      Atty. Cynthia Azor
+                    </p>
+                    <p style="margin: 0 0 10px 0; font-size: 14px; font-weight: 600; color: #B8860B;">
+                      US Immigration Lawyer
+                    </p>
+                    <p style="margin: 0 0 2px 0; font-size: 13px; font-weight: 700; color: #334155;">
+                      CY AZOR LAW TECH SOLUTIONS
+                    </p>
+                    <p style="margin: 0; font-size: 12px; color: #64748b;">
+                      Immigration &bull; Legal Education &bull; Global Mobility
+                    </p>
+                  </td>
+                </tr>
+              </table>
             </td>
           </tr>
+
+          <!-- FOOTER -->
+          <tr>
+            <td align="center" bgcolor="#f8fafc" style="padding: 30px 20px 30px 20px;">
+              <table border="0" cellpadding="0" cellspacing="0" width="100%" style="max-width: 500px; text-align: center;">
+                <tr>
+                  <td style="padding-bottom: 15px;">
+                    <p style="margin: 0; font-size: 12px; color: #64748b; line-height: 1.5;">
+                      You are receiving this update from <a href="http://www.cybarcoach.com" target="_blank" class="link-hover" style="color: #0f172a; text-decoration: none; font-weight: 600;">CyAzor Law Tech Solutions</a>.
+                    </p>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding-bottom: 15px;">
+                    <p style="margin: 0; font-size: 12px; color: #94a3b8; line-height: 1.5;">
+                      &copy; 2026 CyAzor Law Tech Solutions. All rights reserved.<br />
+                      Cross-Border Legal Conversations.
+                    </p>
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <table border="0" cellpadding="0" cellspacing="0" align="center">
+                      <tr>
+                        <td>
+                          <a href="http://www.cybarcoach.com" target="_blank" class="link-hover" style="font-size: 12px; color: #B8860B; text-decoration: none; font-weight: 600; padding: 0 8px;">Website</a>
+                        </td>
+                        <td style="font-size: 12px; color: #cbd5e1;">&bull;</td>
+                        <td>
+                          <a href="https://calendly.com/cynobas/bar-prep-strategy-with-cynthia-azor" target="_blank" class="link-hover" style="font-size: 12px; color: #B8860B; text-decoration: none; font-weight: 600; padding: 0 8px;">Consultation</a>
+                        </td>
+                        <td style="font-size: 12px; color: #cbd5e1;">&bull;</td>
+                        <td>
+                          <a href="#" class="link-hover" style="font-size: 12px; color: #64748b; text-decoration: none; font-weight: 500; padding: 0 8px;">Unsubscribe</a>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
         </table>
       </td>
     </tr>
@@ -170,7 +317,7 @@ async function startServer() {
   app.use(express.json({ limit: '10mb' }));
   const PORT = 3000;
 
-  // ===== NEW: Text-to-HTML AI Converter =====
+  // ===== NEW: Text-to-HTML AI Converter (Always enforces design blueprint layout) =====
   app.post("/api/generate-html-from-text", async (req: any, res: any) => {
       const { siteKey, rawText, subject } = req.body;
       if (!rawText) return res.status(400).json({ error: "Raw text content is required." });
@@ -183,7 +330,7 @@ async function startServer() {
           return res.status(500).json({ error: "Gemini AI API key is not configured." });
       }
 
-      // Fetch saved reference template from library, or use built-in default
+      // Fetch saved reference template from library, or fallback to our built-in master CyBarPrep template
       let referenceTemplate = '';
       try {
           const { data: tenant } = await supabaseAdmin.from('tenants').select('id').eq('site_key', siteKey).single();
@@ -198,77 +345,70 @@ async function startServer() {
                   .maybeSingle();
               if (savedTemplate) referenceTemplate = savedTemplate.html_content;
           }
-      } catch (e) { /* fallback to built-in */ }
+      } catch (e) { /* fallback */ }
 
-      // Use built-in defaults if no saved template found
       if (!referenceTemplate) {
-          if (siteKey === 'cybarprep' || siteKey === 'cyvisahelp') {
-              referenceTemplate = CYBARPREP_REFERENCE_TEMPLATE;
-          }
+          referenceTemplate = CYBARPREP_REFERENCE_TEMPLATE;
       }
 
       const targetUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`;
 
       const systemPrompt = `
-You are an expert email HTML designer for the "${config.brandName}" brand. Convert the raw text below into a beautifully designed responsive HTML email that PRECISELY mimics the visual style, colors, fonts, spacing, and layout patterns of the provided reference template.
+You are an expert email HTML layout engineer for the "${config.brandName}" brand.
+Your job is to convert raw text drafts into highly professional, fully styled responsive HTML emails that inherit the exact visual design of the following reference template:
 
-===== REFERENCE TEMPLATE (Copy this exact aesthetic) =====
+===== MASTER LAYOUT REFERENCE =====
 ${referenceTemplate}
 ===== END REFERENCE =====
 
-===== RAW TEXT TO CONVERT =====
-Subject: ${subject || 'Newsletter Update'}
+===== RAW TEXT DRAFT TO PROCESS =====
+Subject: ${subject || 'Important Brand Update'}
 
 ${rawText}
 ===== END RAW TEXT =====
 
-Brand Configuration:
-- Brand Name: ${config.brandName}
-- Site Key: ${siteKey}
-- Primary Color: ${config.primaryColor}
-- Website: ${config.website}
-- Logo: ${config.logo}
-
-CRITICAL REQUIREMENTS:
-1. Return ONLY a complete, self-contained HTML document starting with <!DOCTYPE html> — NO markdown code fences.
-2. MIRROR the exact color palette, typography, borders, header style, footer layout, and card patterns from the reference template.
-3. Intelligently structure the raw text into logical sections (intro card, numbered points with emojis, tips, CTAs, sign-off) matching the reference layout.
-4. Include these placeholder variables directly in text: {{name}}, {{email}}, {{website_name}}
-5. Preserve all visual signatures: brand header with gold accent, dark navy footer, gold buttons, italic disclaimers, section cards with left border accents.
-6. Add appropriate emojis to section headings (🇺🇸 📅 ⚠️ 🔎 etc.) if the raw text has numbered points or key ideas.
-7. Keep the layout mobile-responsive with max-width 600px table structure.
-8. Match the "Cross-Border Legal Conversations" tone: professional, authoritative, empathetic.
+Instructions:
+1. Re-render the email structure so it follows the reference design.
+2. Replace structural tags in the reference template with elements extracted from the raw text:
+   - {{subject}}: Use "${subject || 'Important Brand Update'}".
+   - {{category_badge}}: e.g., "August 2026 Update" or a tag fitting the text context.
+   - {{headline}}: Write a bold headline wrapping the core topic.
+   - {{name}}: Keep the exact merge variable string "{{name}}".
+   - {{intro_paragraph}}: The primary greeting and setup message from the text.
+   - {{strategic_updates_rows}}: Map any numbered lists, key changes, or paragraphs into rows using the exact nested point format from the reference design. Keep emojis inside left table cells.
+   - {{tip_title}}: A short warning or section title inside the yellow tip box.
+   - {{tip_paragraph}}: The tip/warning content block. If the text has no tip, write an actionable strategy tip related to the topic.
+3. Return ONLY complete, valid HTML starting directly with <!DOCTYPE html> - NO markdown fences like \`\`\`html.
 `;
 
       try {
-          addDebugLog('INFO', `Text→HTML conversion requested for ${siteKey}`);
+          addDebugLog('INFO', `Transforming Text to HTML template for ${siteKey}`);
           const response = await fetch(targetUrl, {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
                   contents: [{ parts: [{ text: systemPrompt }] }],
-                  generationConfig: { temperature: 0.2, maxOutputTokens: 8192 }
+                  generationConfig: { temperature: 0.15, maxOutputTokens: 8192 }
               })
           });
 
           if (!response.ok) {
               const errBody = await response.text();
-              throw new Error(`Gemini API Error ${response.status}: ${errBody}`);
+              throw new Error(`Gemini API Error: ${errBody}`);
           }
 
           const data: any = await response.json();
           let html = data?.candidates?.[0]?.content?.parts?.[0]?.text || "";
           html = html.replace(/^```html\s*/i, "").replace(/^```\s*/, "").replace(/```$/, "").trim();
 
-          addDebugLog('INFO', `Text→HTML successfully generated for ${siteKey}`);
           res.json({ success: true, html });
       } catch (err: any) {
-          addDebugLog('ERROR', `Text→HTML failed: ${err.message}`);
+          addDebugLog('ERROR', `AI conversion failed: ${err.message}`);
           res.status(500).json({ error: err.message });
       }
   });
 
-  // ===== NEW: Template Library CRUD =====
+  // ===== Saved Template Library APIs =====
   app.get("/api/template-library/:siteKey", async (req: any, res: any) => {
       const { siteKey } = req.params;
       try {
@@ -327,7 +467,6 @@ CRITICAL REQUIREMENTS:
               .single();
 
           if (error) throw error;
-          addDebugLog('INFO', `Template "${name}" saved to library for ${siteKey}`);
           res.json({ success: true, template: data });
       } catch (err: any) {
           res.status(500).json({ error: err.message });
@@ -340,54 +479,6 @@ CRITICAL REQUIREMENTS:
           const { error } = await supabaseAdmin.from('template_library').delete().eq('id', id);
           if (error) throw error;
           res.json({ success: true });
-      } catch (err: any) {
-          res.status(500).json({ error: err.message });
-      }
-  });
-
-  // ===== EXISTING: Gemini Mimic Endpoint =====
-  app.post("/api/generate-template-mimic", async (req: any, res: any) => {
-      const { siteKey, referenceHtml, prompt: userPrompt } = req.body;
-      if (!referenceHtml) return res.status(400).json({ error: "Reference HTML is required." });
-
-      const config = siteConfigs.find(s => s.siteKey === siteKey);
-      if (!config) return res.status(400).json({ error: `Invalid site key: ${siteKey}` });
-
-      const geminiKey = process.env.GEMINI_API_KEY;
-      if (!geminiKey || geminiKey === "MY_GEMINI_API_KEY") {
-          return res.status(500).json({ error: "Gemini AI API key is not configured." });
-      }
-
-      const targetUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`;
-      const systemPrompt = `You are an expert HTML Email Designer. Mimic the reference HTML below for brand "${config.brandName}".
-
-Reference:
-${referenceHtml}
-
-Brand: ${config.brandName} | Color: ${config.primaryColor} | Logo: ${config.logo} | URL: ${config.website}
-
-User directives: ${userPrompt || "Recreate cleanly as responsive newsletter."}
-
-Requirements:
-1. Complete HTML doc starting <!DOCTYPE html>, no markdown fences.
-2. Inline styles in <style> tag. Responsive.
-3. Include {{name}}, {{email}}, {{website_name}} placeholders.
-4. Match brand niche (cybarprep=immigration, cyvisahelp=visa, cylawtech=legaltech).`;
-
-      try {
-          const response = await fetch(targetUrl, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                  contents: [{ parts: [{ text: systemPrompt }] }],
-                  generationConfig: { temperature: 0.15, maxOutputTokens: 8192 }
-              })
-          });
-          if (!response.ok) throw new Error(`Gemini ${response.status}: ${await response.text()}`);
-          const data: any = await response.json();
-          let html = data?.candidates?.[0]?.content?.parts?.[0]?.text || "";
-          html = html.replace(/^```html\s*/i, "").replace(/^```\s*/, "").replace(/```$/, "").trim();
-          res.json({ success: true, html });
       } catch (err: any) {
           res.status(500).json({ error: err.message });
       }
@@ -631,11 +722,26 @@ Requirements:
               defaultSubject = 'Welcome to CyAzor LawTech Solutions';
               defaultBody = CYBARPREP_REFERENCE_TEMPLATE
                   .replace('{{subject}}', defaultSubject)
-                  .replace('{{category}}', 'WELCOME')
+                  .replace('{{category_badge}}', 'WELCOME')
                   .replace('{{headline}}', 'Welcome to Cross-Border Legal Conversations')
                   .replace('{{name}}', '{{name}}')
-                  .replace('{{intro}}', 'Thank you for joining our community. You will receive timely immigration updates, legal insights, and case-specific guidance to help you navigate your U.S. immigration pathway.')
-                  .replace('{{content_blocks}}', '<p style="font-size: 15px; line-height: 1.6; color: #475569;">We are excited to have you as part of our subscriber community.</p>');
+                  .replace('{{intro_paragraph}}', 'Thank you for joining our community. You will receive timely immigration updates, legal insights, and case-specific guidance to help you navigate your U.S. immigration pathway.')
+                  .replace('{{strategic_updates_rows}}', `
+                <tr>
+                  <td style="padding-bottom: 30px;">
+                    <table border="0" cellpadding="0" cellspacing="0" width="100%">
+                      <tr>
+                        <td valign="top" width="40" style="font-size: 24px; padding-top: 2px;">🇺🇸</td>
+                        <td align="left" style="padding-left: 10px;">
+                          <h3 style="margin: 0 0 8px 0; font-size: 18px; font-weight: 700; color: #0f172a;">Immigration Pathways</h3>
+                          <p style="margin: 0; font-size: 15px; line-height: 1.6; color: #475569;">Re-evaluate qualification criteria regularly as federal regulatory statuses adjust dynamically.</p>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>`)
+                  .replace('{{tip_title}}', '🔎 Getting Started')
+                  .replace('{{tip_paragraph}}', 'Always maintain a secure folder containing all timeline milestones, physical receipt notices, and case reference ID numbers.');
           }
           res.json({ subject: defaultSubject, body: defaultBody, enabled: true });
       } catch (err: any) {
