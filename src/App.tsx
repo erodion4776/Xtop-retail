@@ -1,4 +1,4 @@
-import { useState, startTransition, useEffect } from 'react';
+import { useState, startTransition, useEffect, useMemo } from 'react';
 import { Menu, Mail, Bell, Activity, Sparkles, AlertCircle, HelpCircle, Loader2 } from 'lucide-react';
 import Sidebar from './components/Sidebar';
 import DashboardView from './components/DashboardView';
@@ -7,19 +7,34 @@ import SettingsView from './components/SettingsView';
 import EmailCenter from './components/EmailCenter';
 
 import { ActiveTab, Subscriber, Campaign, RecentActivity } from './types';
-import { INITIAL_SUBSCRIBERS, INITIAL_CAMPAIGNS, INITIAL_ACTIVITIES } from './mockData';
 import {
   SUPABASE_CONFIGURED,
   getOrCreateClient,
   updateClientSender,
   fetchSubscribersFromDB,
-  addSubscriberToDB,
   deleteSubscriberFromDB,
   fetchCampaignsFromDB,
   createCampaignInDB,
-  seedInitialCache,
   DBClient,
 } from './supabase';
+
+// Helper: formats ISO date to friendly relative time
+function formatRelativeTime(dateStr?: string): string {
+  if (!dateStr) return 'Just now';
+  try {
+    const d = new Date(dateStr);
+    const now = new Date();
+    const diffSec = Math.floor((now.getTime() - d.getTime()) / 1000);
+
+    if (isNaN(diffSec) || diffSec < 45) return 'Just now';
+    if (diffSec < 3600) return `${Math.floor(diffSec / 60)} mins ago`;
+    if (diffSec < 86400) return `${Math.floor(diffSec / 3600)} hours ago`;
+    if (diffSec < 172800) return 'Yesterday';
+    return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  } catch {
+    return 'Recently';
+  }
+}
 
 export default function App() {
   const [activeTab, setActiveTabState] = useState<ActiveTab>('dashboard');
@@ -29,81 +44,136 @@ export default function App() {
   const [activeClient, setActiveClient] = useState<DBClient | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Centralized Master State linked with Supabase
+  // Centralized Master State linked with Database
   const [subscribers, setSubscribers] = useState<Subscriber[]>([]);
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
-  const [activities, setActivities] = useState<RecentActivity[]>(() => {
-    // Activities stay in memory/localStorage for logging simplicity
-    const saved = localStorage.getItem('xtopflow_activities');
-    return saved ? JSON.parse(saved) : INITIAL_ACTIVITIES;
-  });
+  const [emailLogs, setEmailLogs] = useState<any[]>([]);
 
-  // Keep logs synchronized in local cache
-  useEffect(() => {
-    localStorage.setItem('xtopflow_activities', JSON.stringify(activities));
-  }, [activities]);
+  // 1. Initial Load Database hook: fetch client, subscribers, campaigns, and email logs
+  const loadAllData = async () => {
+    try {
+      const client = await getOrCreateClient('eroeliza1234@gmail.com', 'XTOPFlow Broadcasts');
+      setActiveClient(client);
 
-  // Seed default items helper first if unconfigured so sandbox user sees values
-  useEffect(() => {
-    seedInitialCache(INITIAL_SUBSCRIBERS, INITIAL_CAMPAIGNS);
-  }, []);
+      const [subs, camps, logsRes] = await Promise.all([
+        fetchSubscribersFromDB(client.id),
+        fetchCampaignsFromDB(client.id),
+        fetch('/api/email-logs').catch(() => null)
+      ]);
 
-  // 1. Initial Load Database hook
+      setSubscribers(subs || []);
+      setCampaigns(camps || []);
+
+      if (logsRes && logsRes.ok) {
+        const logsData = await logsRes.json();
+        setEmailLogs(logsData || []);
+      }
+    } catch (err) {
+      console.error('Database query sequence error:', err);
+    }
+  };
+
   useEffect(() => {
     async function initDatabase() {
       setIsLoading(true);
-      try {
-        // Automatically establish and register client profile matching the user email 
-        const client = await getOrCreateClient('eroeliza1234@gmail.com', 'XTOPFlow Broadcasts');
-        setActiveClient(client);
-
-        // Load subscribers and campaigns matching this client_id
-        const subs = await fetchSubscribersFromDB(client.id);
-        const camps = await fetchCampaignsFromDB(client.id);
-        
-        console.log('Fetched data:', { subs, camps });
-
-        setSubscribers(subs);
-        setCampaigns(camps);
-      } catch (err) {
-        console.error('Database connection / query failed:', err);
-      } finally {
-        setIsLoading(false);
-      }
+      await loadAllData();
+      setIsLoading(false);
     }
     initDatabase();
   }, []);
 
-  // Refresh data when navigating back to dashboard
+  // Refresh data whenever user navigates back to Dashboard
   useEffect(() => {
-    if (activeTab === 'dashboard' && activeClient) {
-      async function reloadData() {
-        const subs = await fetchSubscribersFromDB(activeClient!.id);
-        const camps = await fetchCampaignsFromDB(activeClient!.id);
-        setSubscribers(subs);
-        setCampaigns(camps);
-      }
-      reloadData();
+    if (activeTab === 'dashboard') {
+      loadAllData();
     }
-  }, [activeTab, activeClient]);
+  }, [activeTab]);
 
-  // Wrap state setting in transition for rendering responsiveness
+  // 2. Synthesize Real-Time Activity Feed from actual database records
+  const dynamicActivities = useMemo<RecentActivity[]>(() => {
+    const list: RecentActivity[] = [];
+
+    // Add subscriber join events
+    subscribers.forEach((s) => {
+      list.push({
+        id: `sub_${s.id}`,
+        type: 'subscriber_join',
+        title: 'New subscriber registered',
+        detail: `${s.email} registered on ${s.site_name || 'Website'}`,
+        timestamp: formatRelativeTime(s.date_added),
+        rawDate: s.date_added || ''
+      });
+    });
+
+    // Add live email log events (reads, sends, bounces)
+    emailLogs.forEach((log) => {
+      if (log.status === 'read') {
+        list.push({
+          id: `log_read_${log.id}`,
+          type: 'email_read',
+          title: 'Email opened & verified',
+          detail: `Recipient ${log.to} opened "${log.subject}"`,
+          timestamp: formatRelativeTime(log.opened_at || log.created_at),
+          rawDate: log.opened_at || log.created_at || ''
+        });
+      } else if (log.status === 'bounced') {
+        list.push({
+          id: `log_bnc_${log.id}`,
+          type: 'email_bounced',
+          title: 'Email delivery bounced',
+          detail: `Message bounced for ${log.to} ("${log.subject}")`,
+          timestamp: formatRelativeTime(log.created_at),
+          rawDate: log.created_at || ''
+        });
+      } else {
+        list.push({
+          id: `log_sent_${log.id}`,
+          type: 'campaign_sent',
+          title: log.type === 'welcome' ? 'Welcome email dispatched' : 'Campaign email delivered',
+          detail: `Sent to ${log.to} ("${log.subject}")`,
+          timestamp: formatRelativeTime(log.created_at),
+          rawDate: log.created_at || ''
+        });
+      }
+    });
+
+    // Add campaign creation events
+    campaigns.forEach((c) => {
+      list.push({
+        id: `camp_${c.id}`,
+        type: c.status === 'sent' ? 'campaign_sent' : 'campaign_created',
+        title: c.status === 'sent' ? 'Campaign Broadcast Sent' : 'Campaign Draft Created',
+        detail: `"${c.name || c.subject}" (Status: ${c.status})`,
+        timestamp: formatRelativeTime(c.date_created),
+        rawDate: c.date_created || ''
+      });
+    });
+
+    // Sort chronologically (newest first)
+    list.sort((a, b) => {
+      const timeA = a.rawDate ? new Date(a.rawDate).getTime() : 0;
+      const timeB = b.rawDate ? new Date(b.rawDate).getTime() : 0;
+      return timeB - timeA;
+    });
+
+    return list.slice(0, 30); // Top 30 recent events
+  }, [subscribers, emailLogs, campaigns]);
+
   const setActiveTab = (tab: ActiveTab) => {
     startTransition(() => {
       setActiveTabState(tab);
     });
   };
 
-  // 2. State mutation callbacks connected with API endpoints
+  // 3. State mutations connected with backend APIs
   const handleAddSubscriber = async (newSub: Omit<Subscriber, 'id' | 'date_added'>) => {
-    // Call backend API with the specifically selected brand site key
     const response = await fetch('/api/subscribers', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ 
         email: newSub.email, 
         name: newSub.name, 
-        siteKey: newSub.client_id // siteKey parameter
+        siteKey: newSub.client_id
       }),
     });
 
@@ -129,16 +199,7 @@ export default function App() {
       };
 
       setSubscribers((prev) => [mappedSub, ...prev]);
-
-      // Push activity logger
-      const activityObj: RecentActivity = {
-        id: `act_${Date.now()}`,
-        type: 'subscriber_join',
-        title: 'New subscriber joined',
-        detail: `${mappedSub.email} joined ${mappedSub.site_name}`,
-        timestamp: 'Just now',
-      };
-      setActivities((prev) => [activityObj, ...prev]);
+      loadAllData();
     } else {
       const errData = await response.json().catch(() => ({}));
       alert(errData.error || 'Could not subscribe user via backend.');
@@ -152,82 +213,20 @@ export default function App() {
     const success = await deleteSubscriberFromDB(id);
     if (success) {
       setSubscribers((prev) => prev.filter((s) => s.id !== id));
-
-      // Register removal activity
-      const activityObj: RecentActivity = {
-        id: `act_${Date.now()}`,
-        type: 'subscriber_join',
-        title: 'Subscriber Record Removed',
-        detail: `${targeted.email} deletion sequence completed`,
-        timestamp: 'Just now',
-      };
-      setActivities((prev) => [activityObj, ...prev]);
+      loadAllData();
     } else {
       alert('Could not delete subscriber record from database.');
     }
   };
 
-  const handleCreateCampaign = async (
-    newCamp: Omit<Campaign, 'id' | 'open_rate' | 'click_rate' | 'date_created'>
-  ) => {
-    if (!activeClient) return;
-
-    const created = await createCampaignInDB(activeClient.id, newCamp);
-
-    if (created) {
-      // Trigger backend campaign sending if status is 'sent'
-      if (newCamp.status === 'sent') {
-          await fetch('/api/send-campaign', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                client_id: activeClient.id,
-                subject: created.subject,
-                content: '<h1>Your Newsletter</h1>', // Simplified for now
-                campaign_id: created.id
-            }),
-          });
-      }
-
-      setCampaigns((prev) => [created, ...prev]);
-
-      // Register activity block
-      const activityObj: RecentActivity = {
-        id: `act_${Date.now()}`,
-        type: created.status === 'sent' ? 'campaign_sent' : 'campaign_created',
-        title: created.status === 'sent' ? 'Campaign Delivered' : 'Campaign draft compiled',
-        detail: `"${created.name}" status flagged as ${created.status.toUpperCase()}`,
-        timestamp: 'Just now',
-      };
-      setActivities((prev) => [activityObj, ...prev]);
-    } else {
-      alert('Could not generate campaign in database.');
-    }
-  };
-
-  // Helper callback for settings updates
   const handleSaveSender = async (newEmail: string, newName: string): Promise<boolean> => {
     if (!activeClient) return false;
     const success = await updateClientSender(activeClient.id, newEmail, newName);
     if (success) {
       setActiveClient((prev) => prev ? { ...prev, sender_email: newEmail, name: newName } : null);
-      
-      // Save notification
-      const activityObj: RecentActivity = {
-        id: `act_${Date.now()}`,
-        type: 'domain_verified',
-        title: 'Sender Info Updated',
-        detail: `Default sender identity updated to ${newName} <${newEmail}>`,
-        timestamp: 'Just now',
-      };
-      setActivities((prev) => [activityObj, ...prev]);
       return true;
     }
     return false;
-  };
-
-  const handleClearActivities = () => {
-    setActivities([]);
   };
 
   return (
@@ -247,7 +246,6 @@ export default function App() {
         {/* Top Sticky Header */}
         <header id="top-sticky-header" className="h-16 bg-white border-b border-zinc-200 px-6 flex items-center justify-between shrink-0 sticky top-0 z-30">
           <div className="flex items-center gap-4">
-            {/* Hamburger Button (Show on mobile) */}
             <button
               id="mobile-menu-hamburger"
               onClick={() => setIsSidebarOpen(true)}
@@ -257,7 +255,6 @@ export default function App() {
               <Menu className="w-5 h-5" />
             </button>
 
-            {/* Breadcrumb Indicator */}
             <div className="flex items-center gap-1.5 text-xs font-semibold text-zinc-500 uppercase tracking-wider">
               <span>SaaS Platform</span>
               <span className="text-zinc-300">/</span>
@@ -265,7 +262,6 @@ export default function App() {
             </div>
           </div>
 
-          {/* Right Action Widgets */}
           <div className="flex items-center gap-4">
             {SUPABASE_CONFIGURED ? (
               <div className="hidden sm:flex items-center gap-1 bg-emerald-50 border border-emerald-250/50 rounded-full px-3 py-1 text-[10px] font-bold text-emerald-800">
@@ -277,7 +273,6 @@ export default function App() {
               </div>
             )}
 
-            {/* Quick alert indicator */}
             <div className="relative">
               <button 
                 id="alert-bell-widget"
@@ -289,7 +284,6 @@ export default function App() {
               </button>
             </div>
 
-            {/* Support trigger */}
             <button
               id="help-guide-widget"
               className="text-xs font-bold text-zinc-500 hover:text-indigo-600 transition-colors hidden md:inline-flex items-center gap-1 cursor-pointer"
@@ -299,17 +293,13 @@ export default function App() {
           </div>
         </header>
 
-        {/* Dynamic Warning Alert for Unauthenticated Users */}
+        {/* Unconfigured Alert Banner */}
         {!SUPABASE_CONFIGURED && (
           <div id="unconfigured-supabase-banner" className="bg-amber-50 border-b border-amber-200 text-amber-900 px-6 py-2.5 text-xs flex items-center justify-between gap-4">
             <div className="flex items-center gap-2">
               <AlertCircle className="w-4.5 h-4.5 text-amber-600 shrink-0" />
               <span>
-                <strong>Configure Supabase:</strong> Mount your remote database credentials inside AI Studio using variables 
-                <code className="mx-1.5 px-1 py-0.5 bg-amber-100 border border-amber-200 rounded text-[10px] font-mono">VITE_SUPABASE_URL</code> 
-                and 
-                <code className="px-1 py-0.5 bg-amber-100 border border-amber-200 rounded text-[10px] font-mono">VITE_SUPABASE_ANON_KEY</code>.
-                Currently running on safe local browser storage backups.
+                <strong>Configure Supabase:</strong> Set <code className="mx-1 px-1 py-0.5 bg-amber-100 border border-amber-200 rounded text-[10px] font-mono">VITE_SUPABASE_URL</code> and <code className="px-1 py-0.5 bg-amber-100 border border-amber-200 rounded text-[10px] font-mono">VITE_SUPABASE_ANON_KEY</code>.
               </span>
             </div>
             <a 
@@ -322,12 +312,12 @@ export default function App() {
           </div>
         )}
 
-        {/* Client View Body Panel */}
+        {/* Main Workspace Body */}
         <main id="primary-view-panel" className="flex-1 p-6 md:p-8 overflow-y-auto max-w-7xl w-full mx-auto">
           {isLoading ? (
             <div id="loading-spinner-container" className="h-64 flex flex-col items-center justify-center text-center gap-3">
-              <Loader2 className="w-8 h-8 text-indigo-650 animate-spin text-indigo-600" />
-              <p className="text-xs text-zinc-500 font-semibold uppercase tracking-wider">Synchronizing with SaaS Backend...</p>
+              <Loader2 className="w-8 h-8 text-indigo-600 animate-spin" />
+              <p className="text-xs text-zinc-500 font-semibold uppercase tracking-wider">Synchronizing Activity Feed with Database...</p>
             </div>
           ) : (
             <>
@@ -335,9 +325,9 @@ export default function App() {
                 <DashboardView
                   subscribers={subscribers}
                   campaigns={campaigns}
-                  activities={activities}
+                  activities={dynamicActivities}
+                  emailLogs={emailLogs}
                   setActiveTab={setActiveTab}
-                  onClearActivities={handleClearActivities}
                 />
               )}
 
@@ -359,6 +349,7 @@ export default function App() {
                   onSaveSender={handleSaveSender}
                 />
               )}
+
               {activeTab === 'email-center' && (
                 <EmailCenter />
               )}
