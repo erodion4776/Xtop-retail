@@ -19,6 +19,7 @@ function logEnvironmentDiagnostic() {
     console.log(`Supabase URL: ${process.env.VITE_SUPABASE_URL ? 'Detected' : 'Missing'}`);
     console.log(`Supabase Service Key: ${process.env.SUPABASE_SERVICE_ROLE_KEY ? 'Detected' : 'Missing'}`);
     console.log(`Resend API Key: ${process.env.RESEND_API_KEY ? 'Detected' : 'Missing'}`);
+    console.log(`Gemini API Key: ${process.env.GEMINI_API_KEY ? 'Detected' : 'Missing'}`);
     console.log("------------------------------");
 }
 
@@ -87,6 +88,94 @@ async function startServer() {
 
   // --- API Routes ---
   
+  // POST /api/generate-template-mimic (Gemini AI-Powered Template Constructor)
+  app.post("/api/generate-template-mimic", async (req: any, res: any) => {
+      const { siteKey, referenceHtml, prompt: userPrompt } = req.body;
+      if (!referenceHtml) {
+          return res.status(400).json({ error: "Reference HTML content is required." });
+      }
+
+      const config = siteConfigs.find(s => s.siteKey === siteKey);
+      if (!config) {
+          return res.status(400).json({ error: `Invalid brand site key: ${siteKey}` });
+      }
+
+      const geminiKey = process.env.GEMINI_API_KEY;
+      if (!geminiKey || geminiKey === "MY_GEMINI_API_KEY") {
+          return res.status(500).json({ error: "Gemini AI API key is not configured on the server. Please add GEMINI_API_KEY inside your environment variables." });
+      }
+
+      const targetUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`;
+
+      const systemPrompt = `
+You are an expert responsive HTML Email Design system. The user wants you to analyze, capture, and mimic the visual style, typography, borders, background colors, and structure of the provided Reference HTML code, recreating it as a clean email template for the brand property "${config.brandName}".
+
+Here is the Reference HTML layout:
+----------------------------------
+${referenceHtml}
+----------------------------------
+
+Brand parameters to incorporate dynamically:
+- Brand Name: ${config.brandName}
+- Brand Key: ${siteKey}
+- Primary Accent Color: ${config.primaryColor}
+- Logo Image URL: ${config.logo}
+- Website URL: ${config.website}
+
+Specific user modification directives:
+${userPrompt || "Mimic the visual layout aesthetic cleanly as a responsive newsletter/onboarding guide."}
+
+Requirements for the output HTML template:
+1. It MUST be a complete, self-contained HTML document starting with <!DOCTYPE html> and ending with </html>.
+2. All CSS styles MUST be written inside a <style> block in the <head> of the document. Keep the layout responsive for screens of all sizes (desktops and mobile apps).
+3. The generated email MUST integrate the following exact variable placeholders directly within text elements:
+   - {{name}} : for the recipient's name (e.g., "Hi {{name}}").
+   - {{email}} : for the recipient's email address (e.g., "sent to {{email}}").
+   - {{website_name}} : for displaying the brand name "${config.brandName}".
+4. The general content context of the template must match the brand property's specific niche:
+   - cyvisahelp: immigration resources, VAWA guides, visa strategy.
+   - cybarprep: California bar exam study guides, concept sheets, preparation checklists.
+   - cylawtech: legal automation engineers stack, triggers, checklists.
+5. Return ONLY the raw, valid, complete HTML content. Do NOT wrap the generated code in markdown blocks like \`\`\`html or \`\`\`. The code must start directly with <!DOCTYPE html> so it can be parsed cleanly.
+`;
+
+      try {
+          addDebugLog('INFO', `Requesting Gemini AI to mimic HTML design for siteKey: ${siteKey}`);
+          const response = await fetch(targetUrl, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                  contents: [{ parts: [{ text: systemPrompt }] }],
+                  generationConfig: {
+                      temperature: 0.15,
+                      maxOutputTokens: 8192
+                  }
+              })
+          });
+
+          if (!response.ok) {
+              const errBody = await response.text();
+              throw new Error(`Gemini API Request Failed with status ${response.status} - ${errBody}`);
+          }
+
+          const data: any = await response.json();
+          let generatedHtml = data?.candidates?.[0]?.content?.parts?.[0]?.text || "";
+
+          // Strip markdown code wrapper headers if Gemini still returns them
+          generatedHtml = generatedHtml.replace(/^```html\s*/i, "");
+          generatedHtml = generatedHtml.replace(/^```\s*/, "");
+          generatedHtml = generatedHtml.replace(/```$/, "");
+          generatedHtml = generatedHtml.trim();
+
+          addDebugLog('INFO', `Successfully generated custom HTML mimic using Gemini AI.`);
+          res.json({ success: true, html: generatedHtml });
+      } catch (err: any) {
+          console.error("Gemini AI integration error:", err.message);
+          addDebugLog('ERROR', `Gemini AI template mimic failed: ${err.message}`);
+          res.status(500).json({ error: `AI Generation failed: ${err.message}` });
+      }
+  });
+
   // GET /api/domain/verify/:domain
   app.get("/api/domain/verify/:domain", async (req: any, res: any) => {
       const results = await checkDomains(req.params.domain);
@@ -558,12 +647,9 @@ async function startServer() {
           <tr>
             <td style="padding: 40px; color: #334155; line-height: 1.6;">
               <h2 style="color: #0F172A; text-align: center;">Welcome to the Academy Portal</h2>
-              <p>Hello {email},</p>
+              <p>Hello {{email}},</p>
               <p>Thank you for connecting with the <strong>CY Visa Help Digital Academy</strong>. We simplify complex immigration procedures into clear, manageable steps.</p>
-              <p>As requested, your digital access pass to the complimentary entry edition of the <strong>VAWA Protection Guide</strong> has been provisioned.</p>
-              <div style="text-align: center; margin: 30px 0;">
-                <a href="https://cyvisahelp.com/vawa-free-reader" target="_blank" style="background-color: #C5A059; color: #FFFFFF; text-decoration: none; padding: 14px 28px; font-weight: bold; border-radius: 50px; display: inline-block;">Open Interactive Reader</a>
-              </div>
+              <p>As requested, your digital access pass to the complimentary VAWA Protection Guide has been provisioned.</p>
             </td>
           </tr>
         </table>
@@ -588,12 +674,8 @@ async function startServer() {
           </tr>
           <tr>
             <td style="padding: 40px; color: #334155; line-height: 1.6;">
-              <p>Hello {email},</p>
-              <p>Thank you for subscribing to <strong>CY Bar Prep</strong>. Our ultimate goal is to build deep conceptual clarity so you can conquer the Bar Exam with confidence.</p>
-              <p>We have prepared your secure legal study toolkit. Access it immediately below:</p>
-              <div style="text-align: center; margin: 30px 0;">
-                <a href="https://cybarprep.com/free-resources" target="_blank" style="background-color: #B91C1C; color: #FFFFFF; text-decoration: none; padding: 14px 28px; font-weight: bold; border-radius: 8px; display: inline-block;">Access Study Kit</a>
-              </div>
+              <p>Hello {{email}},</p>
+              <p>Thank you for subscribing to <strong>CY Bar Prep</strong>. Conceptual clarity is the key to passing.</p>
             </td>
           </tr>
         </table>
@@ -618,12 +700,8 @@ async function startServer() {
           </tr>
           <tr>
             <td style="padding: 40px; color: #334155; line-height: 1.6;">
-              <p>Hello {email},</p>
-              <p>Welcome to <strong>CY Law Tech</strong>! We are excited to have you join our network of legal engineers, automation architects, and advanced tech practitioners.</p>
-              <p>We have prepared our premium Automation Checklist guiding code and document integration pipelines.</p>
-              <div style="text-align: center; margin: 30px 0;">
-                <a href="https://cylawtech.com/checklist" target="_blank" style="background-color: #1D4ED8; color: #FFFFFF; text-decoration: none; padding: 14px 28px; font-weight: bold; border-radius: 8px; display: inline-block;">Get Automation Checklist</a>
-              </div>
+              <p>Hello {{email}},</p>
+              <p>Welcome to <strong>CY Law Tech</strong>! Here is your requested automation checklist.</p>
             </td>
           </tr>
         </table>
@@ -1018,8 +1096,6 @@ async function startServer() {
     
     res.json({ success: true, subscriber });
   });
-
-
 
   // --- Vite Middleware ---
   if (process.env.NODE_ENV !== "production") {
