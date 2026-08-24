@@ -317,6 +317,43 @@ async function startServer() {
   app.use(express.json({ limit: '10mb' }));
   const PORT = 3000;
 
+  // --- API Routes ---
+
+  // ===== NEW: Live Email Open Tracking Pixel Endpoint =====
+  app.get("/api/track/open/:logId", async (req: any, res: any) => {
+      const { logId } = req.params;
+      
+      if (logId && !logId.startsWith('sandbox_id_')) {
+          try {
+              addDebugLog('INFO', `Live email open tracking pixel triggered for log ID: ${logId}`);
+              
+              // Mark the email status as 'read' and stamp the opened_at date
+              await supabaseAdmin
+                  .from('email_logs')
+                  .update({ 
+                      status: 'read',
+                      opened_at: new Date().toISOString()
+                  })
+                  .eq('id', logId);
+                  
+          } catch (e: any) {
+              console.error("Tracking pixel recording failed:", e.message);
+          }
+      }
+
+      // Return a transparent 1x1 base64 encoded PNG tracking image
+      const pixelBinary = Buffer.from(
+          'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=', 
+          'base64'
+      );
+      res.writeHead(200, {
+          'Content-Type': 'image/png',
+          'Content-Length': pixelBinary.length,
+          'Cache-Control': 'no-store, no-cache, must-revalidate, private'
+      });
+      res.end(pixelBinary);
+  });
+
   // ===== NEW: Text-to-HTML AI Converter (Always enforces design blueprint layout) =====
   app.post("/api/generate-html-from-text", async (req: any, res: any) => {
       const { siteKey, rawText, subject } = req.body;
@@ -865,12 +902,17 @@ Instructions:
           const { data: logs } = await supabaseAdmin.from('email_logs').select('id')
               .eq('to', to).order('created_at', { ascending: false }).limit(1);
           if (logs && logs.length > 0) {
-              await supabaseAdmin.from('email_logs').update({ status }).eq('id', logs[0].id);
+              const updatePayload: any = { status };
+              if (status === 'read') {
+                  updatePayload.opened_at = new Date().toISOString();
+              }
+              await supabaseAdmin.from('email_logs').update(updatePayload).eq('id', logs[0].id);
               return res.json({ success: true });
           } else {
               await supabaseAdmin.from('email_logs').insert({
                   to, subject: `Simulated ${status}`, message: `Simulated ${status}`,
-                  type: 'test_simulation', status, created_at: new Date().toISOString()
+                  type: 'test_simulation', status, created_at: new Date().toISOString(),
+                  opened_at: status === 'read' ? new Date().toISOString() : null
               });
               return res.json({ success: true });
           }
