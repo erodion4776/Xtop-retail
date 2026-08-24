@@ -1,42 +1,103 @@
-import express from "express";
-import path from "path";
-import { createServer as createViteServer } from "vite";
-import { getResend, retryOperation } from "./server/resend.js";
-import { supabaseAdmin } from "./server/supabase.js";
-import { checkDomains } from "./server/dns.js";
-import { sendEmail } from "./server/emailService.js";
-import { siteConfigs } from "./server/emailConfig.js";
-import { logEmail } from "./server/logger.js";
-import dotenv from "dotenv";
-import cors from "cors";
-import rateLimit from "express-rate-limit";
+import React, { useState, useEffect } from 'react';
+import { 
+  Mail, Send, Loader2, Sparkles, Code, CheckCircle, 
+  AlertCircle, Building2, Activity, History, PlayCircle, Eye, 
+  RefreshCw, Save, Trash2, FolderOpen, FileText, BookOpen, Wand2, Type
+} from 'lucide-react';
 
-dotenv.config();
+// Internal Splitted Refactored Modules (Client-only imports)
+import { Subscriber, EmailLog, WelcomeTemplate, ActiveTab, SavedTemplate, SITE_DEFAULTS, siteConfigs } from './EmailCenter/types';
+import { EmailHealthTab } from './EmailCenter/EmailHealthTab';
+import { TestEmailTab } from './EmailCenter/TestEmailTab';
 
-function logEnvironmentDiagnostic() {
-    console.log("--- Environment Diagnostic ---");
-    console.log(`Node Environment: ${process.env.NODE_ENV || 'development'}`);
-    console.log(`Supabase URL: ${process.env.VITE_SUPABASE_URL ? 'Detected' : 'Missing'}`);
-    console.log(`Supabase Service Key: ${process.env.SUPABASE_SERVICE_ROLE_KEY ? 'Detected' : 'Missing'}`);
-    console.log(`Resend API Key: ${process.env.RESEND_API_KEY ? 'Detected' : 'Missing'}`);
-    console.log(`Gemini API Key: ${process.env.GEMINI_API_KEY ? 'Detected' : 'Missing'}`);
-    console.log("------------------------------");
-}
+// ===== BRAND STYLE TEMPLATES (LOCAL, INSTANT, NO AI) =====
+const BRAND_STYLE_TEMPLATES: Record<string, (rawText: string, subject: string) => string> = {
+  cybarprep: (rawText: string, subject: string) => {
+    const lines = rawText.trim().split('\n').map(l => l.trim()).filter(Boolean);
+    let category = 'NEWSLETTER UPDATE';
+    let headline = subject || 'Important Update';
+    let intro = '';
+    const bulletPoints: { emoji: string; title: string; body: string }[] = [];
+    let tipTitle = '🔎 Key Takeaway';
+    let tipBody = '';
+    
+    let currentSection: 'intro' | 'points' | 'tip' = 'intro';
+    let introBuffer: string[] = [];
+    let tipBuffer: string[] = [];
+    const emojis = ['🇺🇸', '📅', '⚠️', '📝', '💡', '🎯', '⚖️', '🔒'];
+    let emojiIdx = 0;
 
-const debugLogs: { timestamp: string, message: string, type: string }[] = [];
+    for (const line of lines) {
+      const numberedMatch = line.match(/^(\d+)[\.\)]\s*(.+)$/);
+      const bulletMatch = line.match(/^[-•*]\s*(.+)$/);
+      const tipMatch = line.match(/^(tip|note|important|warning)[:\-]\s*(.+)$/i);
 
-function addDebugLog(type: string, message: string) {
-    debugLogs.push({ timestamp: new Date().toISOString(), type, message });
-    console.log(`[DEBUG/${type}] ${message}`);
-}
+      if (tipMatch) {
+        currentSection = 'tip';
+        tipTitle = `🔎 ${tipMatch[1].charAt(0).toUpperCase() + tipMatch[1].slice(1)}`;
+        tipBuffer.push(tipMatch[2]);
+      } else if (numberedMatch || bulletMatch) {
+        currentSection = 'points';
+        const content = numberedMatch ? numberedMatch[2] : bulletMatch![1];
+        const titleMatch = content.match(/^([^:.]+)[:.]?\s*(.*)$/);
+        const pointTitle = titleMatch ? titleMatch[1].trim() : content;
+        const pointBody = titleMatch && titleMatch[2] ? titleMatch[2].trim() : '';
+        bulletPoints.push({
+          emoji: emojis[emojiIdx % emojis.length],
+          title: pointTitle,
+          body: pointBody || 'Learn more about this important update.'
+        });
+        emojiIdx++;
+      } else if (currentSection === 'intro') {
+        introBuffer.push(line);
+      } else if (currentSection === 'tip') {
+        tipBuffer.push(line);
+      } else {
+        if (bulletPoints.length > 0) {
+          bulletPoints[bulletPoints.length - 1].body += ' ' + line;
+        } else {
+          introBuffer.push(line);
+        }
+      }
+    }
 
-// ===== EXACT MASTER BLUEPRINT DNA (CyBarPrep Template) =====
-const CYBARPREP_REFERENCE_TEMPLATE = `<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+    intro = introBuffer.join(' ') || `If you or a loved one is pursuing a U.S. immigration pathway, this update brings several developments worth paying attention to.`;
+    tipBody = tipBuffer.join(' ') || 'Early legal review can help you understand what alternatives may be available before critical deadlines.';
+
+    if (bulletPoints.length === 0 && intro) {
+      bulletPoints.push({
+        emoji: '📌',
+        title: headline,
+        body: intro
+      });
+      intro = 'Please review the important information below carefully.';
+    }
+
+    const strategicRows = bulletPoints.map((point, idx) => `
+                <tr>
+                  <td style="padding-bottom: 30px;">
+                    <table border="0" cellpadding="0" cellspacing="0" width="100%">
+                      <tr>
+                        <td valign="top" width="40" style="font-size: 24px; padding-top: 2px;">${point.emoji}</td>
+                        <td align="left" style="padding-left: 10px;">
+                          <h3 style="margin: 0 0 8px 0; font-size: 18px; font-weight: 700; color: #0f172a;">
+                            ${idx + 1}. ${point.title}
+                          </h3>
+                          <p style="margin: 0; font-size: 15px; line-height: 1.6; color: #475569;">
+                            ${point.body}
+                          </p>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>`).join('');
+
+    return `<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
 <html xmlns="http://www.w3.org/1999/xhtml" lang="en">
 <head>
   <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>{{subject}}</title>
+  <title>${headline}</title>
   <style type="text/css">
     body, table, td, a { -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%; }
     table, td { mso-table-lspace: 0pt; mso-table-rspace: 0pt; }
@@ -84,14 +145,14 @@ const CYBARPREP_REFERENCE_TEMPLATE = `<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1
                 <tr>
                   <td align="left" style="padding-bottom: 8px;">
                     <span style="font-size: 12px; font-weight: 700; color: #B8860B; letter-spacing: 1.5px; text-transform: uppercase;">
-                      {{category_badge}}
+                      ${category}
                     </span>
                   </td>
                 </tr>
                 <tr>
                   <td align="left" style="padding-bottom: 15px;">
                     <h1 style="margin: 0; font-size: 24px; font-weight: 800; line-height: 1.3; color: #0f172a; letter-spacing: -0.5px; text-transform: uppercase;">
-                      {{headline}}
+                      ${headline}
                     </h1>
                   </td>
                 </tr>
@@ -116,7 +177,7 @@ const CYBARPREP_REFERENCE_TEMPLATE = `<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1
                       Dear {{name}},
                     </p>
                     <p style="margin: 0; font-size: 15px; line-height: 1.6; color: #334155; font-weight: 500;">
-                      {{intro_paragraph}}
+                      ${intro}
                     </p>
                   </td>
                 </tr>
@@ -128,22 +189,22 @@ const CYBARPREP_REFERENCE_TEMPLATE = `<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1
           <tr>
             <td align="left" style="padding: 0 40px 10px 40px;">
               <table border="0" cellpadding="0" cellspacing="0" width="100%">
-                {{strategic_updates_rows}}
+                ${strategicRows}
               </table>
             </td>
           </tr>
 
-          <!-- IMMIGRATION TIP SECTION -->
+          <!-- TIP SECTION -->
           <tr>
             <td align="center" style="padding: 10px 40px 30px 40px;">
               <table border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #fffbeb; border-radius: 8px; border: 1px solid #fde68a;">
                 <tr>
                   <td style="padding: 25px;">
                     <h3 style="margin: 0 0 10px 0; font-size: 16px; font-weight: 800; color: #92400e; text-transform: uppercase; letter-spacing: 1px;">
-                      {{tip_title}}
+                      ${tipTitle}
                     </h3>
                     <p style="margin: 0; font-size: 15px; line-height: 1.6; color: #92400e;">
-                      {{tip_paragraph}}
+                      ${tipBody}
                     </p>
                   </td>
                 </tr>
@@ -151,7 +212,7 @@ const CYBARPREP_REFERENCE_TEMPLATE = `<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1
             </td>
           </tr>
 
-          <!-- CALL TO ACTION (CTA) -->
+          <!-- CALL TO ACTION -->
           <tr>
             <td align="center" style="padding: 10px 40px 30px 40px;">
               <table border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #0f172a; border-radius: 8px; overflow: hidden; text-align: center;">
@@ -167,11 +228,9 @@ const CYBARPREP_REFERENCE_TEMPLATE = `<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1
                     <table border="0" cellpadding="0" cellspacing="0" align="center" width="100%">
                       <tr>
                         <td align="center">
-                          <!-- Button 1: Website -->
                           <a href="http://www.cybarcoach.com" target="_blank" class="btn-outline-hover" style="display: inline-block; padding: 12px 24px; margin: 5px; font-size: 14px; font-weight: 700; color: #ffffff; text-decoration: none; border-radius: 6px; border: 1px solid #475569; transition: background-color 0.2s ease;">
                             Visit Our Website
                           </a>
-                          <!-- Button 2: Consultation -->
                           <a href="https://calendly.com/cynobas/bar-prep-strategy-with-cynthia-azor" target="_blank" class="btn-hover" style="display: inline-block; padding: 12px 24px; margin: 5px; font-size: 14px; font-weight: 700; color: #ffffff; background-color: #B8860B; text-decoration: none; border-radius: 6px; border: 1px solid #B8860B; transition: background-color 0.2s ease;">
                             Book a Consultation
                           </a>
@@ -263,712 +322,1020 @@ const CYBARPREP_REFERENCE_TEMPLATE = `<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1
   </table>
 </body>
 </html>`;
+  }
+};
 
-// Background job scheduler: Check pending domains every 15 minutes
-setInterval(async () => {
-    const { data: pendingDomains } = await supabaseAdmin
-        .from('domains')
-        .select('*')
-        .eq('status', 'pending');
-        
-    for (const dom of pendingDomains || []) {
-        const results = await checkDomains(dom.domain_name);
-        if (results.overall) {
-            await supabaseAdmin.from('domains').update({ 
-                status: 'verified',
-                spf_checked: true,
-                dkim_checked: true,
-                dmarc_checked: true
-            }).eq('id', dom.id);
-        }
+function applyBrandStyle(siteKey: string, rawText: string, subject: string): string {
+  const styler = BRAND_STYLE_TEMPLATES[siteKey] || BRAND_STYLE_TEMPLATES['cybarprep'];
+  return styler(rawText, subject);
+}
+
+export default function EmailCenter() {
+  const [activeTab, setActiveTab] = useState<ActiveTab>('health');
+  const [logs, setLogs] = useState<EmailLog[]>([]);
+  const [subscribers, setSubscribers] = useState<Subscriber[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+
+  // --- Send Broadcast Campaign State ---
+  const [campaignSiteKey, setCampaignSiteKey] = useState('cybarprep');
+  const [campaignSubject, setCampaignSubject] = useState('');
+  const [campaignRawText, setCampaignRawText] = useState('');
+  const [campaignHtml, setCampaignHtml] = useState('<h1>Important Announcement</h1><p>Hi {{name}},</p><p>Check out our latest update!</p>');
+  const [campaignSendMode, setCampaignSendMode] = useState<'plain' | 'html'>('plain');
+  const [campaignTarget, setCampaignTarget] = useState<'all' | 'custom'>('all');
+  const [campaignCustomEmails, setCampaignCustomEmails] = useState('');
+  const [campaignStatus, setCampaignStatus] = useState<{ success?: boolean; msg?: string } | null>(null);
+  const [showCampaignPreview, setShowCampaignPreview] = useState(false);
+
+  // --- Welcome Template State ---
+  const [welcomeSiteKey, setWelcomeSiteKey] = useState('cyvisahelp');
+  const [welcomeSubject, setWelcomeSubject] = useState('');
+  const [welcomeBody, setWelcomeBody] = useState('');
+  const [welcomeLoading, setWelcomeLoading] = useState(false);
+  const [welcomeSaveStatus, setWelcomeSaveStatus] = useState<string | null>(null);
+
+  // --- Gemini AI Mimic Workspace State ---
+  const [showAiMimic, setShowAiMimic] = useState(false);
+  const [referenceHtml, setReferenceHtml] = useState('');
+  const [aiPrompt, setAiPrompt] = useState('');
+  const [aiGenerating, setAiGenerating] = useState(false);
+  const [aiError, setAiError] = useState<string | null>(null);
+  const [previewTab, setPreviewTab] = useState<'preview' | 'code'>('preview');
+
+  // --- Text-to-HTML Conversion Panel State (AI-Based, for welcome tab) ---
+  const [showTextToHtml, setShowTextToHtml] = useState(false);
+  const [rawTextNotes, setRawTextNotes] = useState('');
+  const [textToHtmlSubject, setTextToHtmlSubject] = useState('');
+  const [aiConvertingText, setAiConvertingText] = useState(false);
+  const [aiTextError, setAiTextError] = useState<string | null>(null);
+
+  // --- Saved Template Library State ---
+  const [libraryTemplates, setLibraryTemplates] = useState<SavedTemplate[]>([]);
+  const [libraryLoading, setLibraryLoading] = useState(false);
+  const [librarySiteKey, setLibrarySiteKey] = useState('cyvisahelp');
+  const [saveTemplateName, setSaveTemplateName] = useState('');
+  const [saveTemplateDesc, setSaveTemplateDesc] = useState('');
+  const [saveTemplateCategory, setSaveTemplateCategory] = useState<'general' | 'reference'>('general');
+  const [saveTemplateStatus, setSaveTemplateStatus] = useState<string | null>(null);
+
+  const fetchData = async () => {
+    setIsLoading(true);
+    try {
+      const logsRes = await fetch('/api/email-logs');
+      if (logsRes.ok) setLogs(await logsRes.json());
+      
+      const subsRes = await fetch('/api/subscribers');
+      if (subsRes.ok) setSubscribers(await subsRes.json());
+    } catch (err) {
+      console.error("Failed to fetch logs and subscribers:", err);
+    } finally {
+      setIsLoading(false);
     }
-}, 15 * 60 * 1000);
+  };
 
-async function seedTenantsIfEmpty() {
-  try {
-    const { count, error } = await supabaseAdmin.from('tenants').select('*', { count: 'exact', head: true });
-    if (error) {
-      console.error("Failed to check tenants table:", error.message);
+  const fetchLibraryTemplates = async (siteKey: string) => {
+    setLibraryLoading(true);
+    try {
+      const res = await fetch(`/api/template-library/${siteKey}`);
+      if (res.ok) setLibraryTemplates(await res.json());
+    } catch (err) {
+      console.error("Failed to load templates from library:", err);
+    } finally {
+      setLibraryLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchData();
+  }, [activeTab]);
+
+  useEffect(() => {
+    if (activeTab === 'library') {
+      fetchLibraryTemplates(librarySiteKey);
+    }
+  }, [librarySiteKey, activeTab]);
+
+  const fetchWelcomeTemplate = async () => {
+    setWelcomeLoading(true);
+    setWelcomeSaveStatus(null);
+    try {
+      const res = await fetch(`/api/welcome-template/${welcomeSiteKey}`);
+      if (res.ok) {
+        const data = await res.json();
+        setWelcomeSubject(data.subject);
+        setWelcomeBody(data.body);
+      }
+    } catch (err) {
+      console.error("Failed to load welcome template:", err);
+    } finally {
+      setWelcomeLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'welcome') {
+      fetchWelcomeTemplate();
+    }
+  }, [welcomeSiteKey, activeTab]);
+
+  // ===== INSTANT LOCAL Text-to-HTML for Broadcast Campaign =====
+  const handleApplyBrandStyle = () => {
+    if (!campaignRawText.trim()) {
+      alert('Please type your raw text content first.');
       return;
     }
-    if (count === 0) {
-      console.log("Seeding tenants from local siteConfigs...");
-      const dbTenants = siteConfigs.map(s => ({
-        site_key: s.siteKey,
-        brand_name: s.brandName,
-        sender_name: s.senderName,
-        primary_color: s.primaryColor,
-        logo_url: s.logo
-      }));
-      const { error: insertError } = await supabaseAdmin.from('tenants').insert(dbTenants);
-      if (insertError) console.error("Failed to seed tenants:", insertError.message);
-      else console.log("Tenants seeded successfully.");
-    }
-  } catch (e: any) {
-    console.error("Error during tenant seeding:", e.message);
-  }
-}
+    const styledHtml = applyBrandStyle(campaignSiteKey, campaignRawText, campaignSubject);
+    setCampaignHtml(styledHtml);
+    setCampaignSendMode('html');
+    setShowCampaignPreview(true);
+  };
 
-async function startServer() {
-  logEnvironmentDiagnostic();
-  await seedTenantsIfEmpty();
-  const app = express();
-  app.use(cors());
-  app.use(express.json({ limit: '10mb' }));
-  const PORT = 3000;
+  const handleSendCampaign = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setCampaignStatus(null);
+    setIsLoading(true);
 
-  // --- API Routes ---
-
-  // ===== NEW: Live Email Open Tracking Pixel Endpoint =====
-  app.get("/api/track/open/:logId", async (req: any, res: any) => {
-      const { logId } = req.params;
-      
-      if (logId && !logId.startsWith('sandbox_id_')) {
-          try {
-              addDebugLog('INFO', `Live email open tracking pixel triggered for log ID: ${logId}`);
-              
-              // Mark the email status as 'read' and stamp the opened_at date
-              await supabaseAdmin
-                  .from('email_logs')
-                  .update({ 
-                      status: 'read',
-                      opened_at: new Date().toISOString()
-                  })
-                  .eq('id', logId);
-                  
-          } catch (e: any) {
-              console.error("Tracking pixel recording failed:", e.message);
-          }
+    let targetEmails: string[] = [];
+    if (campaignTarget === 'custom') {
+      targetEmails = campaignCustomEmails.split(',').map(s => s.trim()).filter(s => s.includes('@'));
+      if (targetEmails.length === 0) {
+        setCampaignStatus({ success: false, msg: 'Please provide at least one valid email address.' });
+        setIsLoading(false);
+        return;
       }
+    }
 
-      // Return a transparent 1x1 base64 encoded PNG tracking image
-      const pixelBinary = Buffer.from(
-          'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=', 
-          'base64'
-      );
-      res.writeHead(200, {
-          'Content-Type': 'image/png',
-          'Content-Length': pixelBinary.length,
-          'Cache-Control': 'no-store, no-cache, must-revalidate, private'
+    let messageToSend = '';
+    if (campaignSendMode === 'html') {
+      if (campaignRawText.trim() && !campaignHtml.includes('CyAzor')) {
+        messageToSend = applyBrandStyle(campaignSiteKey, campaignRawText, campaignSubject);
+      } else {
+        messageToSend = campaignHtml;
+      }
+    } else {
+      const textContent = campaignRawText.trim() || 'No content provided.';
+      messageToSend = `<html><body style="font-family: Arial, sans-serif; font-size: 14px; line-height: 1.6; color: #333; padding: 20px;"><pre style="white-space: pre-wrap; font-family: inherit; margin: 0;">${textContent}</pre></body></html>`;
+    }
+
+    try {
+      const res = await fetch('/api/send-campaign', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          siteKey: campaignSiteKey,
+          subject: campaignSubject,
+          message: messageToSend,
+          sendTo: campaignTarget === 'all' ? 'all' : 'selected',
+          emails: targetEmails
+        })
       });
-      res.end(pixelBinary);
-  });
 
-  // ===== NEW: Text-to-HTML AI Converter (Always enforces design blueprint layout) =====
-  app.post("/api/generate-html-from-text", async (req: any, res: any) => {
-      const { siteKey, rawText, subject } = req.body;
-      if (!rawText) return res.status(400).json({ error: "Raw text content is required." });
-
-      const config = siteConfigs.find(s => s.siteKey === siteKey);
-      if (!config) return res.status(400).json({ error: `Invalid brand site key: ${siteKey}` });
-
-      const geminiKey = process.env.GEMINI_API_KEY;
-      if (!geminiKey || geminiKey === "MY_GEMINI_API_KEY") {
-          return res.status(500).json({ error: "Gemini AI API key is not configured." });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setCampaignStatus({ success: true, msg: `Broadcast completed to ${data.sent} recipient(s)!` });
+        setCampaignSubject('');
+        setCampaignRawText('');
+        setCampaignCustomEmails('');
+        fetchData();
+      } else {
+        setCampaignStatus({ success: false, msg: data.error || 'Server rejected the broadcast.' });
       }
+    } catch (err: any) {
+      setCampaignStatus({ success: false, msg: err.message });
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
-      // Fetch saved reference template from library, or fallback to our built-in master CyBarPrep template
-      let referenceTemplate = '';
-      try {
-          const { data: tenant } = await supabaseAdmin.from('tenants').select('id').eq('site_key', siteKey).single();
-          if (tenant) {
-              const { data: savedTemplate } = await supabaseAdmin
-                  .from('template_library')
-                  .select('html_content')
-                  .eq('tenant_id', tenant.id)
-                  .eq('category', 'reference')
-                  .order('created_at', { ascending: false })
-                  .limit(1)
-                  .maybeSingle();
-              if (savedTemplate) referenceTemplate = savedTemplate.html_content;
-          }
-      } catch (e) { /* fallback */ }
+  const handleTextToHtmlConversion = async (targetField: 'welcome' | 'campaign') => {
+    if (!rawTextNotes.trim()) {
+      setAiTextError('Please paste your plain text notes first.');
+      return;
+    }
+    setAiConvertingText(true);
+    setAiTextError(null);
 
-      if (!referenceTemplate) {
-          referenceTemplate = CYBARPREP_REFERENCE_TEMPLATE;
+    const siteKey = targetField === 'welcome' ? welcomeSiteKey : campaignSiteKey;
+    const subject = textToHtmlSubject || (targetField === 'welcome' ? welcomeSubject : campaignSubject);
+
+    try {
+      const res = await fetch('/api/generate-html-from-text', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ siteKey, rawText: rawTextNotes, subject })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        if (targetField === 'welcome') {
+          setWelcomeBody(data.html);
+          if (textToHtmlSubject) setWelcomeSubject(textToHtmlSubject);
+        } else {
+          setCampaignHtml(data.html);
+          if (textToHtmlSubject) setCampaignSubject(textToHtmlSubject);
+        }
+        setRawTextNotes('');
+        setTextToHtmlSubject('');
+        setShowTextToHtml(false);
+      } else {
+        setAiTextError(data.error || 'Unable to parse text into email.');
       }
+    } catch (err: any) {
+      setAiTextError(`AI Text conversion failed: ${err.message}`);
+    } finally {
+      setAiConvertingText(false);
+    }
+  };
 
-      const targetUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`;
+  const handleSaveToLibrary = async (editorType: 'welcome' | 'campaign') => {
+    setSaveTemplateStatus(null);
+    const siteKey = editorType === 'welcome' ? welcomeSiteKey : campaignSiteKey;
+    const htmlContent = editorType === 'welcome' ? welcomeBody : campaignHtml;
 
-      const systemPrompt = `
-You are an expert email HTML layout engineer for the "${config.brandName}" brand.
-Your job is to convert raw text drafts into highly professional, fully styled responsive HTML emails that inherit the exact visual design of the following reference template:
+    if (!saveTemplateName.trim()) {
+      alert("Please provide a name for the saved template.");
+      return;
+    }
 
-===== MASTER LAYOUT REFERENCE =====
-${referenceTemplate}
-===== END REFERENCE =====
-
-===== RAW TEXT DRAFT TO PROCESS =====
-Subject: ${subject || 'Important Brand Update'}
-
-${rawText}
-===== END RAW TEXT =====
-
-Instructions:
-1. Re-render the email structure so it follows the reference design.
-2. Replace structural tags in the reference template with elements extracted from the raw text:
-   - {{subject}}: Use "${subject || 'Important Brand Update'}".
-   - {{category_badge}}: e.g., "August 2026 Update" or a tag fitting the text context.
-   - {{headline}}: Write a bold headline wrapping the core topic.
-   - {{name}}: Keep the exact merge variable string "{{name}}".
-   - {{intro_paragraph}}: The primary greeting and setup message from the text.
-   - {{strategic_updates_rows}}: Map any numbered lists, key changes, or paragraphs into rows using the exact nested point format from the reference design. Keep emojis inside left table cells.
-   - {{tip_title}}: A short warning or section title inside the yellow tip box.
-   - {{tip_paragraph}}: The tip/warning content block. If the text has no tip, write an actionable strategy tip related to the topic.
-3. Return ONLY complete, valid HTML starting directly with <!DOCTYPE html> - NO markdown fences like \`\`\`html.
-`;
-
-      try {
-          addDebugLog('INFO', `Transforming Text to HTML template for ${siteKey}`);
-          const response = await fetch(targetUrl, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                  contents: [{ parts: [{ text: systemPrompt }] }],
-                  generationConfig: { temperature: 0.15, maxOutputTokens: 8192 }
-              })
-          });
-
-          if (!response.ok) {
-              const errBody = await response.text();
-              throw new Error(`Gemini API Error: ${errBody}`);
-          }
-
-          const data: any = await response.json();
-          let html = data?.candidates?.[0]?.content?.parts?.[0]?.text || "";
-          html = html.replace(/^```html\s*/i, "").replace(/^```\s*/, "").replace(/```$/, "").trim();
-
-          res.json({ success: true, html });
-      } catch (err: any) {
-          addDebugLog('ERROR', `AI conversion failed: ${err.message}`);
-          res.status(500).json({ error: err.message });
+    try {
+      const res = await fetch(`/api/template-library/${siteKey}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: saveTemplateName,
+          description: saveTemplateDesc,
+          html_content: htmlContent,
+          category: saveTemplateCategory
+        })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setSaveTemplateStatus(`Template saved to library successfully!`);
+        setSaveTemplateName('');
+        setSaveTemplateDesc('');
+        setTimeout(() => setSaveTemplateStatus(null), 4000);
+      } else {
+        alert(data.error || 'Unable to save template.');
       }
-  });
+    } catch (err: any) {
+      alert(`Network failure: ${err.message}`);
+    }
+  };
 
-  // ===== Saved Template Library APIs =====
-  app.get("/api/template-library/:siteKey", async (req: any, res: any) => {
-      const { siteKey } = req.params;
-      try {
-          const { data: tenant } = await supabaseAdmin.from('tenants').select('id').eq('site_key', siteKey).single();
-          if (!tenant) return res.json([]);
-          
-          const { data, error } = await supabaseAdmin
-              .from('template_library')
-              .select('*')
-              .eq('tenant_id', tenant.id)
-              .order('created_at', { ascending: false });
+  const handleDeleteTemplateFromLibrary = async (id: string) => {
+    if (!confirm('Delete this template from your library?')) return;
+    try {
+      const res = await fetch(`/api/template-library/${id}`, { method: 'DELETE' });
+      if (res.ok) fetchLibraryTemplates(librarySiteKey);
+    } catch (err: any) {
+      alert(`Error: ${err.message}`);
+    }
+  };
+
+  const handleAiMimicGeneration = async () => {
+    if (!referenceHtml.trim()) {
+      setAiError('Please paste reference HTML layout content to analyze.');
+      return;
+    }
+    setAiGenerating(true);
+    setAiError(null);
+    try {
+      const res = await fetch('/api/generate-template-mimic', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ siteKey: welcomeSiteKey, referenceHtml, prompt: aiPrompt })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setWelcomeBody(data.html);
+        setReferenceHtml('');
+        setAiPrompt('');
+        setShowAiMimic(false);
+      } else {
+        setAiError(data.error || 'Failed to capture visual styles.');
+      }
+    } catch (err: any) {
+      setAiError(`AI Mimic connection failed: ${err.message}`);
+    } finally {
+      setAiGenerating(false);
+    }
+  };
+
+  const handleSaveWelcomeTemplate = async () => {
+    setWelcomeLoading(true);
+    setWelcomeSaveStatus(null);
+    try {
+      const res = await fetch(`/api/welcome-template/${welcomeSiteKey}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ subject: welcomeSubject, body: welcomeBody })
+      });
+      if (res.ok) {
+        setWelcomeSaveStatus('Welcome automation layout updated and activated successfully!');
+        setTimeout(() => setWelcomeSaveStatus(null), 4500);
+      } else {
+        const data = await res.json();
+        setWelcomeSaveStatus(`Failed: ${data.error || 'Save rejected.'}`);
+      }
+    } catch (err: any) {
+      setWelcomeSaveStatus(`Network failed: ${err.message}`);
+    } finally {
+      setWelcomeLoading(false);
+    }
+  };
+
+  const handleSimulateWebhook = async (email: string, status: 'delivered' | 'read' | 'bounced' | 'complaint') => {
+    try {
+      const res = await fetch('/api/test/simulate-webhook', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ to: email, status })
+      });
+      if (res.ok) fetchData();
+    } catch (err) {
+      console.error("Webhook simulation failed:", err);
+    }
+  };
+
+  return (
+    <div className="space-y-6 animate-fade-in">
+      <div>
+        <h2 className="text-xl font-bold text-zinc-900 tracking-tight flex items-center gap-2">
+          <Mail className="w-5 h-5 text-indigo-600" /> Multi-Brand Email Center
+        </h2>
+        <p className="text-xs text-zinc-500 mt-1">
+          Monitor multi-tenant delivery metrics, construct visual responsive campaigns, and synthesize custom onboarding flows.
+        </p>
+      </div>
+
+      <div className="flex border-b border-zinc-200 gap-1 overflow-x-auto">
+        {[
+          { id: 'health' as ActiveTab, label: 'Outbound Health Score', icon: Activity },
+          { id: 'send' as ActiveTab, label: 'Broadcast Campaign', icon: Send },
+          { id: 'welcome' as ActiveTab, label: 'Welcome Onboarding & AI Mimic', icon: Sparkles },
+          { id: 'library' as ActiveTab, label: 'Template Library', icon: BookOpen },
+          { id: 'logs' as ActiveTab, label: 'Delivery logs & webhook test', icon: History },
+          { id: 'test' as ActiveTab, label: 'Direct Deliverability Test', icon: PlayCircle },
+        ].map((tab) => {
+          const Icon = tab.icon;
+          return (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`flex items-center gap-2 px-4 py-2.5 text-xs font-semibold border-b-2 transition-all cursor-pointer whitespace-nowrap ${
+                activeTab === tab.id
+                  ? 'border-indigo-600 text-indigo-700 font-bold bg-indigo-50/25'
+                  : 'border-transparent text-zinc-500 hover:text-zinc-800'
+              }`}
+            >
+              <Icon className="w-3.5 h-3.5" />
+              {tab.label}
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="space-y-6">
+        {activeTab === 'health' && (
+          <EmailHealthTab logs={logs} onRefreshSim={fetchData} subscribers={subscribers} />
+        )}
+
+        {activeTab === 'test' && <TestEmailTab />}
+
+        {activeTab === 'send' && (
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 max-w-7xl items-start">
+            <form onSubmit={handleSendCampaign} className="bg-white border border-zinc-200 rounded-xl p-6 shadow-xs space-y-5 lg:col-span-2">
+              <div className="flex justify-between items-center pb-3 border-b border-zinc-100">
+                <div className="flex gap-3 items-center">
+                  <Building2 className="w-4.5 h-4.5 text-zinc-400" />
+                  <h3 className="font-bold text-sm text-zinc-900">Broadcast Campaign Setup</h3>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-bold text-zinc-500 uppercase">Brand Sender Profile</label>
+                  <select
+                    value={campaignSiteKey}
+                    onChange={(e) => setCampaignSiteKey(e.target.value)}
+                    className="w-full text-xs py-2.5 px-3 bg-zinc-50 border border-zinc-200 rounded-lg text-zinc-800 font-medium"
+                  >
+                    <option value="cyvisahelp">CY Visa Help</option>
+                    <option value="cybarprep">CY Bar Prep</option>
+                    <option value="cylawtech">CY Law Tech</option>
+                  </select>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-bold text-zinc-500 uppercase">Target Audience</label>
+                  <select
+                    value={campaignTarget}
+                    onChange={(e) => setCampaignTarget(e.target.value as any)}
+                    className="w-full text-xs py-2.5 px-3 bg-zinc-50 border border-zinc-200 rounded-lg text-zinc-800 font-medium cursor-pointer"
+                  >
+                    <option value="all">Active brand property subscribers</option>
+                    <option value="custom">Manual target list (custom addresses)</option>
+                  </select>
+                </div>
+              </div>
+
+              {campaignTarget === 'custom' && (
+                <div className="space-y-1.5 animate-fade-in">
+                  <label className="text-[11px] font-bold text-zinc-500 uppercase">Target Recipients</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. testing1@domain.com, testing2@domain.com"
+                    value={campaignCustomEmails}
+                    onChange={(e) => setCampaignCustomEmails(e.target.value)}
+                    className="w-full text-xs py-2.5 px-3 bg-zinc-50 border border-zinc-200 rounded-lg text-zinc-800 font-medium"
+                  />
+                </div>
+              )}
+
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-bold text-zinc-500 uppercase">Outbound Subject Line</label>
+                <input
+                  type="text"
+                  placeholder="e.g., U.S. Immigration Update: What You Need to Know This Month"
+                  value={campaignSubject}
+                  onChange={(e) => setCampaignSubject(e.target.value)}
+                  className="w-full text-xs py-2.5 px-3 bg-zinc-50 border border-zinc-200 rounded-lg text-zinc-800 font-medium"
+                  required
+                />
+              </div>
+
+              {/* ===== SEND MODE TOGGLE ===== */}
+              <div className="space-y-2">
+                <label className="text-[11px] font-bold text-zinc-500 uppercase">Send Format Style</label>
+                <div className="flex bg-zinc-100 p-1 rounded-lg border border-zinc-200">
+                  <button
+                    type="button"
+                    onClick={() => setCampaignSendMode('plain')}
+                    className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-md text-xs font-bold transition-all cursor-pointer ${
+                      campaignSendMode === 'plain'
+                        ? 'bg-white text-zinc-900 shadow-sm'
+                        : 'text-zinc-500 hover:text-zinc-700'
+                    }`}
+                  >
+                    <Type className="w-3.5 h-3.5" /> Plain Text
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCampaignSendMode('html')}
+                    className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-md text-xs font-bold transition-all cursor-pointer ${
+                      campaignSendMode === 'html'
+                        ? 'bg-white text-indigo-700 shadow-sm'
+                        : 'text-zinc-500 hover:text-zinc-700'
+                    }`}
+                  >
+                    <Wand2 className="w-3.5 h-3.5" /> HTML Style (Branded)
+                  </button>
+                </div>
+                <p className="text-[10px] text-zinc-500 leading-relaxed">
+                  {campaignSendMode === 'plain' 
+                    ? '📝 Plain text will be sent exactly as you typed it — no styling applied.'
+                    : `✨ HTML Style will auto-convert your raw text into the beautiful ${campaignSiteKey === 'cybarprep' ? 'CyBarPrep' : campaignSiteKey.toUpperCase()} branded design.`
+                  }
+                </p>
+              </div>
+
+              {/* Raw Text Input Area */}
+              <div className="space-y-1.5">
+                <div className="flex justify-between items-center">
+                  <label className="text-[11px] font-bold text-zinc-500 uppercase">
+                    Raw Newsletter Content
+                  </label>
+                  <span className="text-[10px] text-zinc-400 font-medium">
+                    Tip: Use numbered points (1. Something) & Tip: prefix for tips box
+                  </span>
+                </div>
+                <textarea
+                  rows={10}
+                  value={campaignRawText}
+                  onChange={(e) => setCampaignRawText(e.target.value)}
+                  placeholder={`If you or a loved one is pursuing a U.S. immigration pathway, this update brings several developments worth paying attention to.
+
+1. TPS Changes Are Happening: The U.S. government has announced that Temporary Protected Status for Ukraine is scheduled to terminate on October 19, 2026.
+
+2. Visa Bulletin Dates Matter: The August 2026 Visa Bulletin provides the current priority-date cutoffs for family-sponsored and employment-based immigrant visas.
+
+3. Don't Rely on Social Media Advice: Rules can change quickly, and eligibility depends on your individual circumstances.
+
+Tip: If your current status has an expiration date, don't wait until the deadline to explore your options.`}
+                  className="w-full text-xs p-3 bg-zinc-50 border border-zinc-200 focus:border-indigo-500 focus:bg-white rounded-lg text-zinc-800 font-medium leading-relaxed focus:outline-hidden transition-all"
+                />
+              </div>
+
+              {/* HTML Preview Toggle (only for HTML mode) */}
+              {campaignSendMode === 'html' && (
+                <div className="space-y-2">
+                  <div className="flex justify-between items-center">
+                    <button
+                      type="button"
+                      onClick={handleApplyBrandStyle}
+                      className="px-3 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold rounded-lg flex items-center gap-1.5 cursor-pointer transition-all active:scale-95 shadow-xs"
+                    >
+                      <Wand2 className="w-3.5 h-3.5" /> Apply Brand Styling Now
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowCampaignPreview(!showCampaignPreview)}
+                      className="px-3 py-2 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 text-xs font-bold rounded-lg flex items-center gap-1.5 cursor-pointer transition-all"
+                    >
+                      <Eye className="w-3.5 h-3.5" /> {showCampaignPreview ? 'Hide' : 'Show'} Preview
+                    </button>
+                  </div>
+
+                  {showCampaignPreview && campaignHtml && (
+                    <div className="border border-zinc-200 rounded-lg overflow-hidden bg-zinc-100 animate-fade-in">
+                      <div className="bg-zinc-800 px-3 py-2 flex items-center gap-2">
+                        <div className="flex gap-1.5">
+                          <div className="w-2 h-2 rounded-full bg-rose-500"></div>
+                          <div className="w-2 h-2 rounded-full bg-amber-500"></div>
+                          <div className="w-2 h-2 rounded-full bg-emerald-500"></div>
+                        </div>
+                        <span className="text-[10px] font-mono text-zinc-400">Email Preview - {siteConfigs.find(s => s.siteKey === campaignSiteKey)?.brandName}</span>
+                      </div>
+                      <iframe
+                        title="Campaign Email Preview"
+                        className="w-full border-0 bg-white"
+                        style={{ height: '500px' }}
+                        srcDoc={campaignHtml.replace(/{{name}}/g, 'Valued Subscriber')}
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <button
+                type="submit"
+                disabled={isLoading || !campaignRawText.trim()}
+                className="px-5 py-2.5 bg-zinc-900 hover:bg-zinc-850 text-white font-semibold text-xs rounded-lg flex items-center gap-1.5 cursor-pointer disabled:opacity-50 transition-all active:scale-95 duration-100"
+              >
+                {isLoading ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" /> Discharging Broadcast...
+                  </>
+                ) : (
+                  <>
+                    <Send className="w-3.5 h-3.5" /> Dispatch as {campaignSendMode === 'html' ? 'Branded HTML' : 'Plain Text'}
+                  </>
+                )}
+              </button>
+
+              {campaignStatus && (
+                <div className={`p-4 rounded-lg flex items-start gap-2.5 border text-xs leading-relaxed animate-fade-in ${campaignStatus.success ? 'bg-emerald-50 border-emerald-100 text-emerald-800' : 'bg-rose-50 border-rose-100 text-rose-800'}`}>
+                  {campaignStatus.success ? <CheckCircle className="w-4 h-4 shrink-0 mt-0.5" /> : <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />}
+                  <div>
+                    <p className="font-bold">{campaignStatus.success ? 'Outbound Dispatch Completed' : 'Transmission Failed'}</p>
+                    <p className="mt-0.5">{campaignStatus.msg}</p>
+                  </div>
+                </div>
+              )}
+            </form>
+
+            {/* Save Draft to Library Panel */}
+            <div className="bg-white border border-zinc-200 rounded-xl p-5 shadow-xs space-y-4">
+              <div className="flex items-center gap-2 pb-2.5 border-b border-zinc-100">
+                <Save className="w-4 h-4 text-indigo-600" />
+                <h4 className="font-bold text-xs text-zinc-850 uppercase">Save to Library</h4>
+              </div>
+              <p className="text-[11px] text-zinc-500 leading-relaxed">
+                Save this styled HTML layout as a reusable template for future campaigns.
+              </p>
               
-          if (error) throw error;
-          res.json(data || []);
-      } catch (err: any) {
-          res.status(500).json({ error: err.message });
-      }
-  });
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-zinc-500 uppercase">Template Name</label>
+                <input
+                  type="text"
+                  placeholder="e.g. August Visa Bulletin Template"
+                  value={saveTemplateName}
+                  onChange={(e) => setSaveTemplateName(e.target.value)}
+                  className="w-full text-xs p-2 bg-zinc-50 border border-zinc-200 rounded focus:outline-hidden focus:bg-white transition-all font-medium"
+                />
+              </div>
 
-  app.post("/api/template-library/:siteKey", async (req: any, res: any) => {
-      const { siteKey } = req.params;
-      const { name, description, html_content, category } = req.body;
-      
-      if (!name || !html_content) {
-          return res.status(400).json({ error: "Name and HTML content are required." });
-      }
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-zinc-500 uppercase">Description</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Monthly immigration update format"
+                  value={saveTemplateDesc}
+                  onChange={(e) => setSaveTemplateDesc(e.target.value)}
+                  className="w-full text-xs p-2 bg-zinc-50 border border-zinc-200 rounded focus:outline-hidden focus:bg-white transition-all"
+                />
+              </div>
 
-      try {
-          let { data: tenant } = await supabaseAdmin.from('tenants').select('id').eq('site_key', siteKey).single();
-          if (!tenant) {
-              const config = siteConfigs.find(s => s.siteKey === siteKey);
-              if (config) {
-                  const { data: newTenant } = await supabaseAdmin.from('tenants').insert({
-                      site_key: config.siteKey,
-                      brand_name: config.brandName,
-                      sender_name: config.senderName,
-                      primary_color: config.primaryColor,
-                      logo_url: config.logo
-                  }).select().single();
-                  tenant = newTenant;
-              }
-          }
-          
-          if (!tenant) return res.status(404).json({ error: "Tenant not found" });
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-zinc-500 uppercase">Category</label>
+                <select
+                  value={saveTemplateCategory}
+                  onChange={(e) => setSaveTemplateCategory(e.target.value as any)}
+                  className="w-full text-xs p-2 bg-zinc-50 border border-zinc-200 rounded font-medium cursor-pointer"
+                >
+                  <option value="general">Standard Newsletter Draft</option>
+                  <option value="reference">Brand Reference Profile</option>
+                </select>
+              </div>
 
-          const { data, error } = await supabaseAdmin
-              .from('template_library')
-              .insert({
-                  tenant_id: tenant.id,
-                  name,
-                  description: description || '',
-                  html_content,
-                  category: category || 'general'
-              })
-              .select()
-              .single();
+              <button
+                type="button"
+                onClick={() => handleSaveToLibrary('campaign')}
+                className="w-full py-2 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 font-bold text-xs rounded-lg transition-all cursor-pointer border border-zinc-300 shadow-xs"
+              >
+                💾 Save Layout Blueprint
+              </button>
 
-          if (error) throw error;
-          res.json({ success: true, template: data });
-      } catch (err: any) {
-          res.status(500).json({ error: err.message });
-      }
-  });
+              {saveTemplateStatus && (
+                <p className="text-[11px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-150 p-2.5 rounded text-center">
+                  {saveTemplateStatus}
+                </p>
+              )}
+            </div>
+          </div>
+        )}
 
-  app.delete("/api/template-library/:id", async (req: any, res: any) => {
-      const { id } = req.params;
-      try {
-          const { error } = await supabaseAdmin.from('template_library').delete().eq('id', id);
-          if (error) throw error;
-          res.json({ success: true });
-      } catch (err: any) {
-          res.status(500).json({ error: err.message });
-      }
-  });
+        {activeTab === 'welcome' && (
+          <div className="space-y-6 max-w-7xl">
+            <div className="bg-white border border-zinc-200 rounded-xl p-6 shadow-xs space-y-5">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-3 border-b border-zinc-100">
+                <div className="flex gap-2.5 items-center">
+                  <Sparkles className="w-4.5 h-4.5 text-indigo-600 animate-pulse" />
+                  <div>
+                    <h3 className="font-bold text-sm text-zinc-900">Welcome Automation & AI Mimic Workspace</h3>
+                    <p className="text-xs text-zinc-500 mt-0.5">Customize default onboarding content triggered when subscribers register.</p>
+                  </div>
+                </div>
 
-  // GET /api/domain/verify/:domain
-  app.get("/api/domain/verify/:domain", async (req: any, res: any) => {
-      const results = await checkDomains(req.params.domain);
-      res.json(results);
-  });
+                <div className="flex items-center gap-4">
+                  <button
+                    type="button"
+                    onClick={() => setShowTextToHtml(!showTextToHtml)}
+                    className="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 border border-indigo-100 text-indigo-700 rounded text-[10px] font-bold flex items-center gap-1 cursor-pointer transition-all"
+                  >
+                    <Sparkles className="w-3 h-3 text-indigo-600 animate-pulse" /> ✨ AI Text to HTML
+                  </button>
 
-  app.post("/api/test-email", async (req: any, res: any) => {
-      const { email } = req.body;
-      if (!email) return res.status(400).json({ success: false, error: 'Email required' });
-      try {
-          await getResend().emails.send({
-              from: 'noreply@xtopflow.com',
-              to: email,
-              subject: 'XTOPFlow Backend Test Email',
-              html: '<p>Test email working.</p>'
-          });
-          await logEmail(email, 'Test Email', 'Test body', 'test', 'sent');
-          return res.json({ success: true });
-      } catch (error: any) {
-          return res.status(500).json({ success: false, error: error.message });
-      }
-  });
+                  <div className="flex items-center gap-2">
+                    <span className="text-[11px] font-bold text-zinc-500 uppercase whitespace-nowrap">SITE:</span>
+                    <select
+                      value={welcomeSiteKey}
+                      onChange={(e) => setWelcomeSiteKey(e.target.value)}
+                      className="text-xs py-1.5 px-2.5 bg-zinc-50 border border-zinc-200 rounded-md text-zinc-850 font-bold cursor-pointer"
+                    >
+                      <option value="cyvisahelp">CY Visa Help</option>
+                      <option value="cybarprep">CY Bar Prep</option>
+                      <option value="cylawtech">CY Law Tech</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
 
-  const emailLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 20, message: { error: 'Too many requests' } });
+              {welcomeLoading ? (
+                <div className="py-16 flex flex-col items-center justify-center gap-2.5 text-zinc-500 text-xs font-semibold">
+                  <Loader2 className="w-6 h-6 animate-spin text-indigo-600" />
+                  <span>Loading brand assets...</span>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  <div className="space-y-4">
+                    {showTextToHtml && (
+                      <div className="p-4 bg-indigo-50/40 border border-indigo-100 rounded-lg space-y-3 animate-slide-down">
+                        <div className="flex items-center gap-2">
+                          <Sparkles className="w-4 h-4 text-indigo-600 animate-pulse" />
+                          <h4 className="font-bold text-xs text-indigo-900">Convert Text to Branded HTML (AI)</h4>
+                        </div>
+                        
+                        <div className="space-y-1">
+                          <label className="text-[10px] font-bold text-indigo-750 uppercase">Subject Line</label>
+                          <input
+                            type="text"
+                            placeholder="Subject..."
+                            value={textToHtmlSubject}
+                            onChange={(e) => setTextToHtmlSubject(e.target.value)}
+                            className="w-full text-xs p-2 bg-white border border-indigo-100 rounded"
+                          />
+                        </div>
 
-  app.post("/api/send-email", emailLimiter, async (req: any, res: any) => {
-      const { to, subject, message } = req.body;
-      if (!to || !subject || !message) return res.status(400).json({ success: false, error: 'Missing fields' });
-      if (!to.includes('@')) return res.status(400).json({ success: false, error: 'Invalid email' });
-      
-      const senderName = process.env.SENDER_NAME || 'CylawTech';
-      const senderEmail = process.env.SENDER_EMAIL || 'hello@cylawtech.com';
-      const replyTo = process.env.REPLY_TO_EMAIL || 'support@cylawtech.com';
-      const fromAddress = `"${senderName}" <${senderEmail}>`;
+                        <div className="space-y-1">
+                          <label className="text-[10px] font-bold text-indigo-750 uppercase">Raw Text</label>
+                          <textarea
+                            rows={6}
+                            placeholder="Paste plain text notes..."
+                            value={rawTextNotes}
+                            onChange={(e) => setRawTextNotes(e.target.value)}
+                            className="w-full text-xs p-2.5 bg-white border border-indigo-100 rounded text-zinc-800"
+                          />
+                        </div>
 
-      try {
-          try {
-              await retryOperation(() => getResend().emails.send({
-                  from: fromAddress, to, subject, html: message, replyTo,
-                  headers: { 'List-Unsubscribe': `<https://cylawtech.com/unsubscribe?email=${encodeURIComponent(to)}>` }
-              }));
-          } catch (resendErr: any) {
-              await retryOperation(() => getResend().emails.send({
-                  from: 'onboarding@resend.dev', to, subject, html: message, replyTo
-              }));
-          }
-          await logEmail(to, subject, message, 'api_request', 'sent');
-          return res.json({ success: true, message: 'Sent' });
-      } catch (error: any) {
-          await logEmail(to, subject, message, 'api_request', 'failed');
-          return res.status(500).json({ success: false, error: error.message });
-      }
-  });
+                        <div className="flex justify-between items-center">
+                          <button type="button" onClick={() => setShowTextToHtml(false)} className="text-[10px] font-bold text-indigo-700 hover:underline cursor-pointer">
+                            Dismiss
+                          </button>
+                          <button
+                            type="button"
+                            disabled={aiConvertingText}
+                            onClick={() => handleTextToHtmlConversion('welcome')}
+                            className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-[11px] rounded-md flex items-center gap-1 cursor-pointer"
+                          >
+                            {aiConvertingText ? (<><Loader2 className="w-3 h-3 animate-spin" /> Processing...</>) : (<><Sparkles className="w-3 h-3" /> Transform with AI</>)}
+                          </button>
+                        </div>
+                        {aiTextError && <p className="text-[11px] text-rose-600 font-semibold">⚠️ {aiTextError}</p>}
+                      </div>
+                    )}
 
-  app.get("/api/subscribers", async (req: any, res: any) => {
-    const { data, error } = await supabaseAdmin
-        .from('subscribers')
-        .select(`id, email, name, status, created_at, tenants (id, brand_name, site_key)`)
-        .order('created_at', { ascending: false });
-    if (error) return res.status(500).json({ error: error.message });
-    res.json(data || []);
-  });
+                    <div className="space-y-1.5">
+                      <label className="text-[11px] font-bold text-zinc-500 uppercase">Subject Line</label>
+                      <input
+                        type="text"
+                        value={welcomeSubject}
+                        onChange={(e) => setWelcomeSubject(e.target.value)}
+                        className="w-full text-xs py-2.5 px-3 bg-zinc-50 border border-zinc-200 rounded-lg text-zinc-800 font-medium"
+                      />
+                    </div>
 
-  app.post("/api/subscribers", async (req: any, res: any) => {
-    const { email, name, siteKey } = req.body;
-    const key = siteKey || "cyvisahelp";
-    if (!email || !email.includes('@')) return res.status(400).json({ error: "Valid email required" });
+                    <div className="space-y-1.5">
+                      <div className="flex justify-between items-center">
+                        <label className="text-[11px] font-bold text-zinc-500 uppercase">HTML Source</label>
+                        <button
+                          type="button"
+                          onClick={() => setShowAiMimic(!showAiMimic)}
+                          className="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 border border-indigo-100 text-indigo-700 rounded text-[10px] font-bold flex items-center gap-1 cursor-pointer transition-all"
+                        >
+                          <Sparkles className="w-3 h-3 text-indigo-600 animate-pulse" /> ✨ Gemini Layout Mimic
+                        </button>
+                      </div>
 
-    try {
-        let { data: tenant } = await supabaseAdmin.from('tenants').select('id, brand_name').eq('site_key', key).single();
-        if (!tenant) {
-            const config = siteConfigs.find(s => s.siteKey === key);
-            if (config) {
-                const { data: newTenant } = await supabaseAdmin.from('tenants').insert({
-                    site_key: config.siteKey, brand_name: config.brandName,
-                    sender_name: config.senderName, primary_color: config.primaryColor, logo_url: config.logo
-                }).select().single();
-                if (newTenant) tenant = { id: newTenant.id, brand_name: newTenant.brand_name };
-            }
-        }
-        if (!tenant) return res.status(404).json({ error: `Tenant "${key}" not configured` });
+                      {showAiMimic && (
+                        <div className="p-4 bg-indigo-50/40 border border-indigo-100 rounded-lg space-y-3.5 animate-slide-down">
+                          <div className="flex items-center gap-2">
+                            <Sparkles className="w-4 h-4 text-indigo-600" />
+                            <h4 className="font-bold text-xs text-indigo-900">AI Layout Blueprint Mimic</h4>
+                          </div>
+                          <div className="space-y-1">
+                            <label className="text-[10px] font-bold text-indigo-750 uppercase">Reference HTML</label>
+                            <textarea
+                              rows={5}
+                              value={referenceHtml}
+                              onChange={(e) => setReferenceHtml(e.target.value)}
+                              placeholder="Paste HTML..."
+                              className="w-full text-[10px] p-2 bg-white border border-indigo-100 rounded font-mono text-zinc-800"
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <label className="text-[10px] font-bold text-indigo-750 uppercase">Directives</label>
+                            <input
+                              type="text"
+                              value={aiPrompt}
+                              onChange={(e) => setAiPrompt(e.target.value)}
+                              placeholder="Optional tweaks..."
+                              className="w-full text-xs p-2 bg-white border border-indigo-100 rounded"
+                            />
+                          </div>
+                          <div className="flex justify-between items-center pt-1.5">
+                            <button type="button" onClick={() => setShowAiMimic(false)} className="text-[10px] font-bold text-indigo-700 hover:underline cursor-pointer">
+                              Dismiss
+                            </button>
+                            <button
+                              type="button"
+                              disabled={aiGenerating}
+                              onClick={handleAiMimicGeneration}
+                              className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-[11px] rounded-md flex items-center gap-1 cursor-pointer"
+                            >
+                              {aiGenerating ? (<><Loader2 className="w-3 h-3 animate-spin" /> Analyzing...</>) : (<><Sparkles className="w-3 h-3" /> Recreate</>)}
+                            </button>
+                          </div>
+                          {aiError && <p className="text-[11px] text-rose-600 font-semibold bg-white p-2.5 rounded border border-rose-100">⚠️ {aiError}</p>}
+                        </div>
+                      )}
 
-        const { data: existing } = await supabaseAdmin.from('subscribers').select('id')
-            .eq('email', email).eq('tenant_id', tenant.id).maybeSingle();
-        if (existing) return res.status(400).json({ error: `Already subscribed to ${tenant.brand_name}` });
+                      <textarea
+                        rows={13}
+                        value={welcomeBody}
+                        onChange={(e) => setWelcomeBody(e.target.value)}
+                        className="w-full text-xs p-3 bg-zinc-900 text-indigo-300 font-mono rounded-lg border border-zinc-800"
+                      />
+                    </div>
 
-        const { data: subscriber, error: subErr } = await supabaseAdmin.from('subscribers')
-            .insert({ email, name: name || 'Subscriber', tenant_id: tenant.id, status: 'active' })
-            .select('*').single();
-        if (subErr) throw subErr;
+                    <div className="flex justify-between items-center pt-2">
+                      <span className="text-[11px] text-zinc-500">Activation applies instantly.</span>
+                      <button
+                        type="button"
+                        onClick={handleSaveWelcomeTemplate}
+                        className="px-4 py-2 bg-zinc-900 hover:bg-zinc-850 text-white font-semibold text-xs rounded-lg cursor-pointer transition-all shadow-xs"
+                      >
+                        Activate Onboarding Flow
+                      </button>
+                    </div>
 
-        try {
-            await sendEmail({ siteKey: key, to: email, templateName: 'welcome',
-                variables: { name: name || 'there', email, website_name: tenant.brand_name } });
-        } catch (mailErr: any) {
-            addDebugLog('ERROR', `Welcome email failed to ${email}: ${mailErr.message}`);
-        }
-        res.json(subscriber);
-    } catch (err: any) {
-        res.status(500).json({ error: err.message });
-    }
-  });
+                    {welcomeSaveStatus && (
+                      <p className="text-xs font-bold text-indigo-700 bg-indigo-50/50 p-3 border border-indigo-150 rounded-lg animate-fade-in">
+                        {welcomeSaveStatus}
+                      </p>
+                    )}
+                  </div>
 
-  app.put("/api/subscribers/:id", async (req: any, res: any) => {
-    const { id } = req.params;
-    const { email, name, status, siteKey } = req.body;
-    if (!id) return res.status(400).json({ error: "ID required" });
-    try {
-        const updateData: any = {};
-        if (email !== undefined) updateData.email = email;
-        if (name !== undefined) updateData.name = name;
-        if (status !== undefined) updateData.status = status;
-        if (siteKey !== undefined) {
-            const { data: tenant } = await supabaseAdmin.from('tenants').select('id').eq('site_key', siteKey).single();
-            if (tenant) updateData.tenant_id = tenant.id;
-        }
-        const { data, error } = await supabaseAdmin.from('subscribers').update(updateData).eq('id', id)
-            .select(`id, email, name, status, created_at, tenants (id, brand_name, site_key)`).single();
-        if (error) throw error;
-        res.json(data);
-    } catch (err: any) {
-        res.status(500).json({ error: err.message });
-    }
-  });
+                  <div className="bg-zinc-50 border border-zinc-200 rounded-xl p-4 flex flex-col space-y-3 min-h-[500px]">
+                    <div className="flex justify-between items-center border-b border-zinc-250 pb-2">
+                      <div className="flex items-center gap-1.5">
+                        <Eye className="w-4 h-4 text-zinc-400" />
+                        <h4 className="font-bold text-xs text-zinc-700">Email Preview</h4>
+                      </div>
+                      <div className="flex bg-zinc-200 p-0.5 rounded-lg text-[10px] font-bold">
+                        <button onClick={() => setPreviewTab('preview')} className={`px-3 py-1 rounded-md cursor-pointer ${previewTab === 'preview' ? 'bg-white text-zinc-800 shadow-xs' : 'text-zinc-500'}`}>
+                          Render
+                        </button>
+                        <button onClick={() => setPreviewTab('code')} className={`px-3 py-1 rounded-md cursor-pointer ${previewTab === 'code' ? 'bg-white text-zinc-800 shadow-xs' : 'text-zinc-500'}`}>
+                          Source
+                        </button>
+                      </div>
+                    </div>
 
-  app.delete("/api/subscribers/:id", async (req: any, res: any) => {
-    const { id } = req.params;
-    if (!id) return res.status(400).json({ error: "ID required" });
-    try {
-        await supabaseAdmin.from('campaign_recipients').delete().eq('subscriber_id', id);
-        const { error } = await supabaseAdmin.from('subscribers').delete().eq('id', id);
-        if (error) throw error;
-        res.json({ success: true });
-    } catch (err: any) {
-        res.status(500).json({ error: err.message });
-    }
-  });
+                    {previewTab === 'preview' ? (
+                      <div className="flex-1 bg-white border border-zinc-200 rounded-lg overflow-hidden relative flex flex-col min-h-[480px]">
+                        <iframe
+                          title="Preview"
+                          className="w-full flex-1 border-0"
+                          srcDoc={welcomeBody
+                            .replace(/{{name}}/g, 'Sarah Connor')
+                            .replace(/{{email}}/g, 'sarah@example.com')
+                            .replace(/{{website_name}}/g, siteConfigs.find(s => s.siteKey === welcomeSiteKey)?.brandName || 'Brand')
+                          }
+                        />
+                      </div>
+                    ) : (
+                      <div className="flex-1 bg-zinc-900 border border-zinc-800 rounded-lg p-3 overflow-auto max-h-[500px] min-h-[480px]">
+                        <pre className="text-[10px] text-indigo-300 font-mono whitespace-pre-wrap leading-relaxed">{welcomeBody}</pre>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
-  app.post("/api/subscribers/bulk", async (req: any, res: any) => {
-    const { subscribers: list, siteKey } = req.body;
-    const key = siteKey || "cyvisahelp";
-    if (!Array.isArray(list) || list.length === 0) return res.status(400).json({ error: "List required" });
-    try {
-        let { data: tenant } = await supabaseAdmin.from('tenants').select('id, brand_name').eq('site_key', key).single();
-        if (!tenant) {
-            const config = siteConfigs.find(s => s.siteKey === key);
-            if (config) {
-                const { data: newTenant } = await supabaseAdmin.from('tenants').insert({
-                    site_key: config.siteKey, brand_name: config.brandName,
-                    sender_name: config.senderName, primary_color: config.primaryColor, logo_url: config.logo
-                }).select().single();
-                if (newTenant) tenant = { id: newTenant.id, brand_name: newTenant.brand_name };
-            }
-        }
-        if (!tenant) return res.status(404).json({ error: `Tenant "${key}" not configured` });
+        {activeTab === 'library' && (
+          <div className="space-y-6 max-w-7xl animate-fade-in">
+            <div className="bg-white border border-zinc-200 rounded-xl p-6 shadow-xs space-y-5">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-3 border-b border-zinc-150">
+                <div className="flex gap-2.5 items-center">
+                  <FolderOpen className="w-5 h-5 text-indigo-600" />
+                  <div>
+                    <h3 className="font-bold text-sm text-zinc-900">Branded Templates Library</h3>
+                    <p className="text-xs text-zinc-500 mt-0.5">Explore, load, and manage reusable email layouts.</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] font-bold text-zinc-500 uppercase">FILTER:</span>
+                  <select
+                    value={librarySiteKey}
+                    onChange={(e) => setLibrarySiteKey(e.target.value)}
+                    className="text-xs py-1.5 px-3 bg-zinc-50 border border-zinc-200 rounded-md text-zinc-850 font-bold cursor-pointer"
+                  >
+                    <option value="cyvisahelp">CY Visa Help</option>
+                    <option value="cybarprep">CY Bar Prep</option>
+                    <option value="cylawtech">CY Law Tech</option>
+                  </select>
+                </div>
+              </div>
 
-        const { data: preExisting } = await supabaseAdmin.from('subscribers').select('email').eq('tenant_id', tenant.id);
-        const existingEmails = new Set((preExisting || []).map((s: any) => s.email.toLowerCase().trim()));
+              {libraryLoading ? (
+                <div className="py-16 text-center text-zinc-400 text-xs flex flex-col items-center justify-center gap-2">
+                  <Loader2 className="w-5 h-5 animate-spin text-indigo-600" />
+                  <span>Loading library...</span>
+                </div>
+              ) : libraryTemplates.length === 0 ? (
+                <div className="py-16 text-center text-zinc-400 space-y-3.5 max-w-md mx-auto">
+                  <FileText className="w-10 h-10 text-zinc-300 mx-auto" />
+                  <div>
+                    <p className="font-bold text-zinc-700">Library is Empty</p>
+                    <p className="text-xs text-zinc-400 mt-1 leading-relaxed">Save drafts from Campaign panel to view them here.</p>
+                  </div>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {libraryTemplates.map((tpl) => (
+                    <div key={tpl.id} className="border border-zinc-200 rounded-xl bg-zinc-50/30 overflow-hidden flex flex-col justify-between hover:shadow-md transition-all group">
+                      <div className="p-4 space-y-2">
+                        <div className="flex items-start justify-between">
+                          <span className={`px-2.5 py-1 text-[10px] font-bold uppercase rounded ${tpl.category === 'reference' ? 'bg-indigo-50 text-indigo-700 border border-indigo-100' : 'bg-zinc-100 text-zinc-700'}`}>
+                            {tpl.category === 'reference' ? 'Reference' : 'Newsletter'}
+                          </span>
+                          <button onClick={() => handleDeleteTemplateFromLibrary(tpl.id)} className="p-1 hover:bg-rose-50 rounded text-zinc-400 hover:text-rose-600 cursor-pointer">
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                        <h4 className="font-bold text-xs text-zinc-900 group-hover:text-indigo-600 transition-colors truncate">{tpl.name}</h4>
+                        <p className="text-[11px] text-zinc-400 leading-relaxed line-clamp-2 h-8">{tpl.description || 'No description.'}</p>
+                        <p className="text-[9px] text-zinc-400 font-mono">Saved: {new Date(tpl.created_at).toLocaleString()}</p>
+                      </div>
+                      <div className="p-3 bg-zinc-50 border-t border-zinc-150 grid grid-cols-2 gap-2 text-center">
+                        <button
+                          onClick={() => {
+                            setCampaignHtml(tpl.html_content);
+                            setCampaignSendMode('html');
+                            setActiveTab('send');
+                          }}
+                          className="py-1.5 bg-white hover:bg-zinc-100 border border-zinc-200 text-zinc-700 font-bold text-[10px] rounded cursor-pointer shadow-xs"
+                        >
+                          Load to Campaign
+                        </button>
+                        <button
+                          onClick={() => {
+                            setWelcomeBody(tpl.html_content);
+                            setActiveTab('welcome');
+                          }}
+                          className="py-1.5 bg-zinc-900 hover:bg-zinc-800 text-white font-bold text-[10px] rounded cursor-pointer shadow-xs"
+                        >
+                          Load to Welcome
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
-        const toInsert: any[] = [];
-        let duplicatesCount = 0, invalidCount = 0;
-        for (const item of list) {
-            const email = (item.email || '').trim().toLowerCase();
-            const name = (item.name || '').trim() || 'Subscriber';
-            if (!email || !email.includes('@')) { invalidCount++; continue; }
-            if (existingEmails.has(email)) { duplicatesCount++; continue; }
-            toInsert.push({ email, name, tenant_id: tenant.id, status: 'active' });
-            existingEmails.add(email);
-        }
-
-        let insertedCount = 0;
-        if (toInsert.length > 0) {
-            const { data } = await supabaseAdmin.from('subscribers').insert(toInsert).select('*');
-            insertedCount = data?.length || toInsert.length;
-        }
-        res.json({ success: true, imported: insertedCount, duplicates: duplicatesCount, invalid: invalidCount, totalProcessed: list.length });
-    } catch (err: any) {
-        res.status(500).json({ error: err.message });
-    }
-  });
-
-  app.post("/api/send-campaign", async (req: any, res: any) => {
-      const { siteKey, subject, message, sendTo, emails } = req.body;
-      try {
-          const { data: tenant } = await supabaseAdmin.from('tenants').select('id').eq('site_key', siteKey).single();
-          if (!tenant) return res.status(400).json({ error: `Invalid siteKey` });
-
-          let targets: string[] = [];
-          if (sendTo === 'all') {
-              const { data } = await supabaseAdmin.from('subscribers').select('email')
-                  .eq('tenant_id', tenant.id).eq('status', 'active');
-              targets = data?.map((s: any) => s.email) || [];
-          } else if (emails?.length) {
-              targets = emails;
-          }
-          if (targets.length === 0) return res.status(400).json({ error: `No active subscribers for ${siteKey}` });
-
-          for (const to of targets) {
-              await sendEmail({ siteKey, to, templateName: 'campaign',
-                  variables: { name: 'User', email: to, message } });
-          }
-          res.json({ success: true, sent: targets.length });
-      } catch (e: any) {
-          res.status(500).json({ error: e.message });
-      }
-  });
-
-  app.post("/api/send-welcome-email", async (req: any, res: any) => {
-      const { siteKey, email, name } = req.body;
-      try {
-          await sendEmail({ siteKey, to: email, templateName: 'welcome',
-              variables: { name, email, website_name: siteKey } });
-          res.json({ success: true });
-      } catch (e: any) {
-          res.status(500).json({ error: e.message });
-      }
-  });
-
-  app.get("/api/welcome-template/:siteKey", async (req: any, res: any) => {
-      const { siteKey } = req.params;
-      try {
-          const { data: tenant } = await supabaseAdmin.from('tenants').select('id, brand_name').eq('site_key', siteKey).single();
-          let existingTemplate = null;
-          if (tenant) {
-              const { data } = await supabaseAdmin.from('email_templates').select('*')
-                  .eq('tenant_id', tenant.id).eq('name', 'welcome').maybeSingle();
-              existingTemplate = data;
-          }
-          if (existingTemplate) {
-              return res.json({ subject: existingTemplate.subject, body: existingTemplate.html_content, enabled: true });
-          }
-
-          let defaultSubject = 'Welcome! 🎉';
-          let defaultBody = '<h1>Welcome!</h1><p>Thank you for subscribing.</p>';
-          if (siteKey === 'cybarprep' || siteKey === 'cyvisahelp') {
-              defaultSubject = 'Welcome to CyAzor LawTech Solutions';
-              defaultBody = CYBARPREP_REFERENCE_TEMPLATE
-                  .replace('{{subject}}', defaultSubject)
-                  .replace('{{category_badge}}', 'WELCOME')
-                  .replace('{{headline}}', 'Welcome to Cross-Border Legal Conversations')
-                  .replace('{{name}}', '{{name}}')
-                  .replace('{{intro_paragraph}}', 'Thank you for joining our community. You will receive timely immigration updates, legal insights, and case-specific guidance to help you navigate your U.S. immigration pathway.')
-                  .replace('{{strategic_updates_rows}}', `
-                <tr>
-                  <td style="padding-bottom: 30px;">
-                    <table border="0" cellpadding="0" cellspacing="0" width="100%">
-                      <tr>
-                        <td valign="top" width="40" style="font-size: 24px; padding-top: 2px;">🇺🇸</td>
-                        <td align="left" style="padding-left: 10px;">
-                          <h3 style="margin: 0 0 8px 0; font-size: 18px; font-weight: 700; color: #0f172a;">Immigration Pathways</h3>
-                          <p style="margin: 0; font-size: 15px; line-height: 1.6; color: #475569;">Re-evaluate qualification criteria regularly as federal regulatory statuses adjust dynamically.</p>
+        {activeTab === 'logs' && (
+          <div className="bg-white border border-zinc-200 rounded-xl shadow-xs overflow-hidden max-w-7xl animate-fade-in">
+            <div className="p-5 border-b border-zinc-150 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+              <div>
+                <h4 className="font-bold text-sm text-zinc-900">System Logs & Delivery History</h4>
+                <p className="text-xs text-zinc-500 mt-1">Audit statuses and simulate webhook feedback.</p>
+              </div>
+              <button
+                onClick={fetchData}
+                disabled={isLoading}
+                className="px-3.5 py-2 bg-zinc-550/15 hover:bg-zinc-100 border border-zinc-200 rounded-lg text-xs font-bold flex items-center gap-1.5 cursor-pointer text-zinc-700"
+              >
+                <RefreshCw className="w-3.5 h-3.5" /> Refresh
+              </button>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left">
+                <thead>
+                  <tr className="bg-zinc-50 border-b border-zinc-150 text-[10px] font-bold text-zinc-500 uppercase tracking-wider">
+                    <th className="py-3 px-5">Recipient</th>
+                    <th className="py-3 px-5">Subject</th>
+                    <th className="py-3 px-5">Type</th>
+                    <th className="py-3 px-5 text-center">Status</th>
+                    <th className="py-3 px-5 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-zinc-100 text-xs font-medium text-zinc-700">
+                  {logs.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="py-12 text-center text-zinc-400">
+                        <History className="w-8 h-8 text-zinc-300 mx-auto mb-2" />
+                        <p className="font-semibold text-zinc-500">No logs found</p>
+                      </td>
+                    </tr>
+                  ) : (
+                    logs.map((log) => (
+                      <tr key={log.id} className="hover:bg-zinc-50/50 transition-colors">
+                        <td className="py-3.5 px-5 font-bold text-zinc-900">{log.to}</td>
+                        <td className="py-3.5 px-5 text-zinc-500 truncate max-w-xs">{log.subject}</td>
+                        <td className="py-3.5 px-5">
+                          <span className="px-2 py-0.5 bg-zinc-100 text-zinc-600 text-[10px] font-semibold uppercase tracking-wider rounded">{log.type}</span>
+                        </td>
+                        <td className="py-3.5 px-5 text-center">
+                          <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold capitalize ${
+                            log.status === 'read'
+                              ? 'bg-blue-50 text-indigo-700 border border-indigo-100'
+                              : log.status === 'delivered'
+                              ? 'bg-emerald-50 text-emerald-800'
+                              : log.status === 'sent'
+                              ? 'bg-teal-50 text-teal-800'
+                              : log.status === 'pending'
+                              ? 'bg-amber-50 text-amber-800 animate-pulse'
+                              : 'bg-rose-50 text-rose-700'
+                          }`}>
+                            <span className={`w-1.5 h-1.5 rounded-full ${
+                              log.status === 'read' ? 'bg-indigo-600' :
+                              log.status === 'delivered' ? 'bg-emerald-500' :
+                              log.status === 'sent' ? 'bg-teal-500' :
+                              log.status === 'pending' ? 'bg-amber-500' : 'bg-rose-500'
+                            }`} />
+                            {log.status}
+                          </span>
+                        </td>
+                        <td className="py-3.5 px-5 text-right space-x-1.5 whitespace-nowrap">
+                          <button onClick={() => handleSimulateWebhook(log.to, 'delivered')} className="px-2.5 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded text-[10px] font-bold cursor-pointer transition-colors">Delivered</button>
+                          <button onClick={() => handleSimulateWebhook(log.to, 'read')} className="px-2.5 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded text-[10px] font-bold cursor-pointer transition-colors">Read (Opened)</button>
+                          <button onClick={() => handleSimulateWebhook(log.to, 'bounced')} className="px-2.5 py-1 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded text-[10px] font-bold cursor-pointer transition-colors">Bounce</button>
                         </td>
                       </tr>
-                    </table>
-                  </td>
-                </tr>`)
-                  .replace('{{tip_title}}', '🔎 Getting Started')
-                  .replace('{{tip_paragraph}}', 'Always maintain a secure folder containing all timeline milestones, physical receipt notices, and case reference ID numbers.');
-          }
-          res.json({ subject: defaultSubject, body: defaultBody, enabled: true });
-      } catch (err: any) {
-          res.status(500).json({ error: err.message });
-      }
-  });
-
-  app.post("/api/welcome-template/:siteKey", async (req: any, res: any) => {
-      const { siteKey } = req.params;
-      const { subject, body } = req.body;
-      if (!subject || !body) return res.status(400).json({ error: "Subject and body required" });
-      try {
-          let { data: tenant } = await supabaseAdmin.from('tenants').select('id, brand_name').eq('site_key', siteKey).single();
-          if (!tenant) {
-              const config = siteConfigs.find(s => s.siteKey === siteKey);
-              if (config) {
-                  const { data: newTenant } = await supabaseAdmin.from('tenants').insert({
-                      site_key: config.siteKey, brand_name: config.brandName,
-                      sender_name: config.senderName, primary_color: config.primaryColor, logo_url: config.logo
-                  }).select().single();
-                  if (newTenant) tenant = { id: newTenant.id, brand_name: newTenant.brand_name };
-              }
-          }
-          if (!tenant) return res.status(444).json({ error: `Tenant "${siteKey}" unconfigured` });
-
-          const { data: existing } = await supabaseAdmin.from('email_templates').select('id')
-              .eq('tenant_id', tenant.id).eq('name', 'welcome').maybeSingle();
-          if (existing) {
-              await supabaseAdmin.from('email_templates').update({
-                  subject, html_content: body, text_content: body.replace(/<[^>]*>/g, '')
-              }).eq('id', existing.id);
-          } else {
-              await supabaseAdmin.from('email_templates').insert({
-                  tenant_id: tenant.id, name: 'welcome', subject,
-                  html_content: body, text_content: body.replace(/<[^>]*>/g, '')
-              });
-          }
-          res.json({ success: true, message: `Welcome template updated for ${tenant.brand_name}` });
-      } catch (err: any) {
-          res.status(500).json({ error: err.message });
-      }
-  });
-
-  app.post("/api/external/subscribe", async (req: any, res: any) => {
-      const { siteKey, email, name } = req.body;
-      if (!email || !email.includes('@')) return res.status(400).json({ success: false, error: "Valid email required" });
-      const key = siteKey || "cyvisahelp";
-      try {
-          let { data: tenant } = await supabaseAdmin.from('tenants').select('id, brand_name').eq('site_key', key).single();
-          if (!tenant) {
-              const config = siteConfigs.find(s => s.siteKey === key);
-              if (config) {
-                  const { data: newTenant } = await supabaseAdmin.from('tenants').insert({
-                      site_key: config.siteKey, brand_name: config.brandName,
-                      sender_name: config.senderName, primary_color: config.primaryColor, logo_url: config.logo
-                  }).select().single();
-                  if (newTenant) tenant = { id: newTenant.id, brand_name: newTenant.brand_name };
-              }
-          }
-          if (!tenant) return res.status(400).json({ success: false, error: `Tenant "${key}" not found` });
-
-          const { data: existing } = await supabaseAdmin.from('subscribers').select('id')
-              .eq('email', email).eq('tenant_id', tenant.id).maybeSingle();
-          let subscriber = existing;
-          if (!existing) {
-              const { data } = await supabaseAdmin.from('subscribers')
-                  .insert({ email, name, tenant_id: tenant.id, status: 'active' }).select().single();
-              subscriber = data;
-          }
-          try {
-              await sendEmail({ siteKey: key, to: email, templateName: 'welcome',
-                  variables: { name: name || 'there', email, website_name: tenant.brand_name } });
-          } catch (mailErr: any) {
-              addDebugLog('ERROR', `External welcome failed: ${mailErr.message}`);
-          }
-          await logEmail(email, `External Subscription: ${tenant.brand_name}`, `Subscriber: ${email}`, 'subscription_attempt', 'sent');
-          res.json({ success: true, message: `Subscribed to ${tenant.brand_name}`, subscriber });
-      } catch (e: any) {
-          await logEmail(email, `Failed Subscription: ${key}`, e.message, 'subscription_attempt', 'failed');
-          res.status(500).json({ success: false, error: e.message });
-      }
-  });
-
-  app.get("/api/email-logs", async (req: any, res: any) => {
-    const { data, error } = await supabaseAdmin.from('email_logs').select('*').order('created_at', { ascending: false });
-    if (error) return res.status(500).json({ error: error.message });
-    res.json(data || []);
-  });
-
-  app.post("/api/webhooks/resend", async (req: any, res: any) => {
-      const payload = req.body;
-      const type = payload.type;
-      const data = payload.data;
-      if (!type || !data) return res.status(400).json({ error: 'Invalid payload' });
-      const to = Array.isArray(data.to) ? data.to[0] : data.to;
-      if (!to) return res.status(400).json({ error: 'No recipient' });
-
-      let dbStatus = 'sent';
-      if (type === 'email.delivered') dbStatus = 'delivered';
-      else if (type === 'email.bounced') dbStatus = 'bounced';
-      else if (type === 'email.complained') dbStatus = 'complaint';
-
-      try {
-          const { data: matchedLogs } = await supabaseAdmin.from('email_logs').select('id, subject')
-              .eq('to', to).order('created_at', { ascending: false }).limit(1);
-          if (matchedLogs && matchedLogs.length > 0) {
-              await supabaseAdmin.from('email_logs').update({ status: dbStatus }).eq('id', matchedLogs[0].id);
-          } else {
-              await logEmail(to, data.subject || 'Webhook', `ID: ${data.email_id || ''}`, 'webhook', dbStatus);
-          }
-          res.json({ success: true, processed: true });
-      } catch (err: any) {
-          res.status(500).json({ error: err.message });
-      }
-  });
-
-  app.post("/api/test/simulate-webhook", async (req: any, res: any) => {
-      const { to, status } = req.body;
-      if (!to || !status) return res.status(400).json({ error: "Missing parameters" });
-      try {
-          const { data: logs } = await supabaseAdmin.from('email_logs').select('id')
-              .eq('to', to).order('created_at', { ascending: false }).limit(1);
-          if (logs && logs.length > 0) {
-              const updatePayload: any = { status };
-              if (status === 'read') {
-                  updatePayload.opened_at = new Date().toISOString();
-              }
-              await supabaseAdmin.from('email_logs').update(updatePayload).eq('id', logs[0].id);
-              return res.json({ success: true });
-          } else {
-              await supabaseAdmin.from('email_logs').insert({
-                  to, subject: `Simulated ${status}`, message: `Simulated ${status}`,
-                  type: 'test_simulation', status, created_at: new Date().toISOString(),
-                  opened_at: status === 'read' ? new Date().toISOString() : null
-              });
-              return res.json({ success: true });
-          }
-      } catch (err: any) {
-          res.status(500).json({ error: err.message });
-      }
-  });
-
-  app.get("/api/debug-logs", (req: any, res: any) => res.json(debugLogs.slice(-100)));
-
-  app.get("/api/health-check", async (req: any, res: any) => {
-    try {
-      const { count, error } = await supabaseAdmin.from('tenants').select('*', { count: 'exact', head: true });
-      if (error) throw error;
-      res.json({ status: 'connected', tenantCount: count });
-    } catch (e: any) {
-      res.status(500).json({ status: 'error', message: e.message });
-    }
-  });
-
-  const ipRateLimit = new Map<string, number[]>();
-  app.post("/api/subscribe", async (req: any, res: any) => {
-    const ip = req.ip || 'unknown';
-    const now = Date.now();
-    const timestamps = ipRateLimit.get(ip) || [];
-    const recent = timestamps.filter(t => now - t < 60000);
-    if (recent.length >= 10) return res.status(429).json({ error: 'Too many requests' });
-    recent.push(now);
-    ipRateLimit.set(ip, recent);
-
-    const { email, name, client_id } = req.body;
-    if (!email || !email.includes('@') || !client_id) return res.status(400).json({ error: 'Invalid payload' });
-    
-    const { data: clientExists } = await supabaseAdmin.from('clients').select('id').eq('id', client_id).single();
-    if (!clientExists) return res.status(400).json({ error: 'Invalid client_id' });
-    
-    const { data: subscriber, error } = await supabaseAdmin.from('subscribers')
-      .insert([{ email, name, client_id, status: 'active' }]).select('*').single();
-    if (error) return res.status(500).json({ error: error.message });
-
-    res.json({ success: true, subscriber });
-  });
-
-  // Vite Middleware
-  if (process.env.NODE_ENV !== "production") {
-    const vite = await createViteServer({ server: { middlewareMode: true }, appType: "spa" });
-    app.use(vite.middlewares);
-  } else {
-    const distPath = path.join(process.cwd(), 'dist');
-    app.use(express.static(distPath));
-    app.get('*', (req, res) => res.sendFile(path.join(distPath, 'index.html')));
-  }
-
-  app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Server running on http://localhost:${PORT}`);
-  });
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
 }
-
-startServer();
