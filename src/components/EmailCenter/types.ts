@@ -5,10 +5,7 @@ export interface Subscriber {
   status?: string;
   site_name?: string;
   client_id?: string;
-  tenants?: {
-    brand_name: string;
-    site_key: string;
-  };
+  tenants?: { brand_name: string; site_key: string; };
 }
 
 export interface EmailLog {
@@ -26,19 +23,30 @@ export interface WelcomeTemplate {
   enabled: boolean;
 }
 
-export type ActiveTab = 'health' | 'send' | 'welcome' | 'logs' | 'test';
+export interface SavedTemplate {
+  id: string;
+  tenant_id: string;
+  name: string;
+  description: string;
+  html_content: string;
+  category: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export type ActiveTab = 'health' | 'send' | 'welcome' | 'logs' | 'test' | 'library';
 
 export const SITE_DEFAULTS: Record<string, { subject: string; body: string }> = {
   cyvisahelp: {
     subject: 'Your Free VAWA Strategy Guide is Inside 🔐',
-    body: `<h3>Welcome to the VAWA Strategy Academy</h3><p>Your free protection guide has been compiled. Explore it here to map your independent immigration pathway.</p>`
+    body: `<h3>Welcome to VAWA Strategy Academy</h3><p>Your guide is ready.</p>`
   },
   cybarprep: {
-    subject: 'Your Free California Bar Exam Study Kit is ready 📝',
-    body: `<h3>Welcome to CY Bar Prep</h3><p>Conceptual clarity is the key to passing. Download your essay and MBE cheat-sheets to begin studying today!</p>`
+    subject: 'Welcome to CyAzor LawTech Solutions',
+    body: `<h3>Welcome to Cross-Border Legal Conversations</h3><p>Thank you for joining.</p>`
   },
   cylawtech: {
-    subject: 'Your Free LawTech Automation Checklist is inside ⚙️',
-    body: `<h3>Welcome to CY Law Tech</h3><p>Start automating your document drafting workflows using our secure tech stack blueprints.</p>`
+    subject: 'Your Free LawTech Automation Checklist',
+    body: `<h3>Welcome to CY Law Tech</h3><p>Start automating today.</p>`
   }
 };
