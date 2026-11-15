@@ -1,20 +1,48 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://ai.google.dev/static/site-assets/images/share-ais-513315318.png" />
-</div>
+# XTOP Retail
 
-# Run and deploy your AI Studio app
+A full-stack retail web application built with React, Vite, Express, and Supabase.
 
-This contains everything you need to run your app locally.
+This repository contains a React frontend and an Express server, with Supabase-backed application services and email integration dependencies.
 
-View your app in AI Studio: https://ai.studio/apps/53b1f1ef-1885-4d56-a32c-cc7869fbdde8
+## Technology stack
 
-## Run Locally
+- React 19 and Vite
+- Node.js and Express
+- Supabase JavaScript client
+- TypeScript tooling
+- Tailwind CSS
+- Motion
+- Resend integration
+- esbuild for server bundling
 
-**Prerequisites:**  Node.js
+## Local development
 
+**Requirements:** Node.js and npm.
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+```bash
+git clone https://github.com/erodion4776/Xtop-retail.git
+cd Xtop-retail
+npm install
+npm run dev
+```
+
+## Build and run
+
+```bash
+npm run build
+npm start
+```
+
+The build script creates the frontend bundle and bundles the Express server into `dist/server.cjs`.
+
+## Configuration and security
+
+Configure required environment variables in your local environment or hosting provider. Never commit API keys, Supabase service-role keys, email credentials, or customer data. Review server routes and authorization before exposing administrative functions publicly.
+
+## Project status
+
+An evolving full-stack application. Refer to the current source code and deployment settings for the exact state of each workflow.
+
+## Maintainer
+
+**Ero Osarodion Odion** — [@erodion4776](https://github.com/erodion4776)
